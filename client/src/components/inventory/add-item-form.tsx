@@ -14,7 +14,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Category, Supplier } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,11 +40,19 @@ interface AddItemFormProps {
 export function AddItemForm({ onSuccess }: AddItemFormProps) {
   const { toast } = useToast();
 
-  const { data: categories, isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({
+  const {
+    data: categories,
+    isLoading: categoriesLoading,
+    error: categoriesError,
+  } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
   });
 
-  const { data: suppliers, isLoading: suppliersLoading, error: suppliersError } = useQuery<Supplier[]>({
+  const {
+    data: suppliers,
+    isLoading: suppliersLoading,
+    error: suppliersError,
+  } = useQuery<Supplier[]>({
     queryKey: ["/api/suppliers"],
   });
 
@@ -64,15 +78,22 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
         ...values,
         purchasePrice: parseFloat(values.purchasePrice),
         sellingPrice: parseFloat(values.sellingPrice),
-        categoryId: values.categoryId ? parseInt(values.categoryId.toString()) : undefined,
-        supplierId: values.supplierId ? parseInt(values.supplierId.toString()) : undefined,
+        categoryId:
+          values.categoryId !== undefined
+            ? parseInt(values.categoryId.toString())
+            : undefined,
+        supplierId:
+          values.supplierId !== undefined
+            ? parseInt(values.supplierId.toString())
+            : undefined,
         quantity: parseInt(values.quantity.toString()),
         alertThreshold: parseInt(values.alertThreshold.toString()),
         expiryDate: values.expiryDate ? new Date(values.expiryDate) : undefined,
       };
-      
-      const res = await apiRequest("POST", "/api/products", payload);
-      return await res.json();
+
+      // apiRequest already returns parsed JSON (throws on non-2xx),
+      // return that directly instead of calling res.json()
+      return await apiRequest("POST", "/api/products", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
@@ -86,7 +107,8 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
     onError: (error) => {
       toast({
         title: "Error",
-        description: error.message || "There was an error adding the product",
+        description:
+          (error as any)?.message || "There was an error adding the product",
         variant: "destructive",
       });
     },
@@ -169,22 +191,23 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
               <FormItem>
                 <FormLabel>Category</FormLabel>
                 <Select
-                  onValueChange={field.onChange}
-                  value={field.value?.toString()}
+                  onValueChange={(val) =>
+                    field.onChange(val === "__none" ? undefined : parseInt(val))
+                  }
+                  value={
+                    field.value !== undefined
+                      ? field.value.toString()
+                      : "__none"
+                  }
                 >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                  </FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {categoriesLoading ? (
-                      <SelectItem value="" disabled>Loading categories...</SelectItem>
-                    ) : categoriesError ? (
-                      <SelectItem value="" disabled>Error loading categories</SelectItem>
-                    ) : categories?.map((category) => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
+                    <SelectItem value="__none">None</SelectItem>
+                    {categories?.map((c) => (
+                      <SelectItem key={c.id} value={c.id.toString()}>
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -201,22 +224,23 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
               <FormItem>
                 <FormLabel>Supplier</FormLabel>
                 <Select
-                  onValueChange={field.onChange}
-                  value={field.value?.toString()}
+                  onValueChange={(val) =>
+                    field.onChange(val === "__none" ? undefined : parseInt(val))
+                  }
+                  value={
+                    field.value !== undefined
+                      ? field.value.toString()
+                      : "__none"
+                  }
                 >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select supplier" />
-                    </SelectTrigger>
-                  </FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a supplier" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {suppliersLoading ? (
-                      <SelectItem value="" disabled>Loading suppliers...</SelectItem>
-                    ) : suppliersError ? (
-                      <SelectItem value="" disabled>Error loading suppliers</SelectItem>
-                    ) : suppliers?.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id.toString()}>
-                        {supplier.name}
+                    <SelectItem value="__none">None</SelectItem>
+                    {suppliers?.map((s) => (
+                      <SelectItem key={s.id} value={s.id.toString()}>
+                        {s.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -255,7 +279,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
               </FormItem>
             )}
           />
-          
+
           <FormField
             control={form.control}
             name="expiryDate"
@@ -279,12 +303,12 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
               <FormItem>
                 <FormLabel>Purchase Price (R) *</FormLabel>
                 <FormControl>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
+                  <Input
+                    type="number"
+                    step="0.01"
                     min="0"
-                    placeholder="0.00" 
-                    {...field} 
+                    placeholder="0.00"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />
@@ -299,12 +323,12 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
               <FormItem>
                 <FormLabel>Selling Price (R) *</FormLabel>
                 <FormControl>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    min="0" 
-                    placeholder="0.00" 
-                    {...field} 
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    {...field}
                   />
                 </FormControl>
                 <FormMessage />
@@ -314,9 +338,9 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button 
-            type="button" 
-            variant="outline" 
+          <Button
+            type="button"
+            variant="outline"
             onClick={() => {
               form.reset();
               if (onSuccess) onSuccess();
@@ -324,11 +348,15 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
           >
             Cancel
           </Button>
-          <Button 
-            type="submit" 
-            disabled={addProductMutation.isPending || categoriesLoading || suppliersLoading}
+          <Button
+            type="submit"
+            disabled={
+              addProductMutation.isLoading ||
+              categoriesLoading ||
+              suppliersLoading
+            }
           >
-            {addProductMutation.isPending ? "Adding..." : "Add Product"}
+            {addProductMutation.isLoading ? "Adding..." : "Add Product"}
           </Button>
         </div>
       </form>

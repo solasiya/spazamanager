@@ -1,9 +1,10 @@
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertSupplierSchema, Supplier } from "@shared/schema";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -12,24 +13,30 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Category } from "@shared/schema";
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 
-// Extend the insertion schema
-const formSchema = insertSupplierSchema;
+// Update the form schema to include categories
+const formSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  contactPerson: z.string().min(1, "Contact person is required"),
+  phone: z.string().min(1, "Phone is required"),
+  email: z.string().email("Invalid email address"),
+  address: z.string().min(1, "Address is required"),
+  categories: z.array(z.string()).min(1, "At least one category is required"),
+});
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -38,14 +45,32 @@ interface AddSupplierFormProps {
   onSuccess?: () => void;
 }
 
+// Add these predefined categories
+const PREDEFINED_CATEGORIES = [
+  "Beverages",
+  "Bakery",
+  "Dairy",
+  "Canned Goods",
+  "Cleaning",
+];
+
 export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
     supplier?.categories || []
   );
 
-  const { data: categories } = useQuery<Category[]>({
+  const {
+    data: categories,
+    isLoading: categoriesLoading,
+    error: categoriesError,
+  } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
+    queryFn: async () => {
+      // apiRequest should return parsed JSON or throw on error
+      return await apiRequest("GET", "/api/categories");
+    },
   });
 
   const form = useForm<FormValues>({
@@ -62,31 +87,50 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
 
   const addSupplierMutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      const payload = {
+        name: values.name,
+        contactPerson: values.contactPerson,
+        phone: values.phone,
+        email: values.email,
+        address: values.address,
+        categories: selectedCategories, // Use the selectedCategories state
+      };
+      // log payload to help debug server 500
+      console.debug("[AddSupplier] payload:", payload);
+
       if (supplier) {
-        // Update existing supplier
-        const res = await apiRequest("PUT", `/api/suppliers/${supplier.id}`, values);
-        return await res.json();
-      } else {
-        // Add new supplier
-        const res = await apiRequest("POST", "/api/suppliers", values);
-        return await res.json();
+        return await apiRequest(
+          "PUT",
+          `/api/suppliers/${supplier.id}`,
+          payload
+        );
       }
+      return await apiRequest("POST", "/api/suppliers", payload);
     },
     onSuccess: () => {
+      // invalidate supplier list cache
       queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
       toast({
-        title: supplier ? "Supplier updated" : "Supplier added",
-        description: supplier 
-          ? `${supplier.name} has been updated successfully` 
-          : "The supplier has been added successfully",
+        title: supplier ? "Supplier updated" : "Supplier created",
+        description: `Successfully ${supplier ? "updated" : "added"} supplier`,
       });
       form.reset();
       if (onSuccess) onSuccess();
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // show detailed error info in console and toast (if available)
+      console.error(
+        "[AddSupplier] mutation error:",
+        error,
+        (error as any)?.body
+      );
+      const serverDetail =
+        (error as any)?.body?.message ||
+        (error as any)?.body ||
+        (error as any)?.message;
       toast({
         title: "Error",
-        description: error.message || `Failed to ${supplier ? "update" : "add"} supplier`,
+        description: serverDetail || "Failed to save supplier",
         variant: "destructive",
       });
     },
@@ -94,21 +138,37 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
 
   const handleCategorySelect = (category: string) => {
     if (!selectedCategories.includes(category)) {
-      const newCategories = [...selectedCategories, category];
-      setSelectedCategories(newCategories);
-      form.setValue("categories", newCategories);
+      setSelectedCategories([...selectedCategories, category]);
     }
   };
 
   const removeCategory = (category: string) => {
-    const newCategories = selectedCategories.filter(c => c !== category);
-    setSelectedCategories(newCategories);
-    form.setValue("categories", newCategories);
+    setSelectedCategories(selectedCategories.filter((c) => c !== category));
   };
 
   const onSubmit = (values: FormValues) => {
+    // Validate categories
+    if (selectedCategories.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select at least one category",
+        variant: "destructive",
+      });
+      return;
+    }
+
     addSupplierMutation.mutate(values);
   };
+
+  // show a small loading/disabled state for the category select
+  if (categoriesLoading) {
+    // keep the form UI responsive — you can return a small skeleton or disable submit
+  }
+
+  // Update form field for categories to use selectedCategories
+  useEffect(() => {
+    form.setValue("categories", selectedCategories);
+  }, [selectedCategories, form]);
 
   return (
     <Form {...form}>
@@ -118,10 +178,53 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Supplier Name *</FormLabel>
+              <FormLabel>Supplier Name</FormLabel>
               <FormControl>
-                <Input placeholder="Supplier name" {...field} />
+                <Input placeholder="Enter supplier name" {...field} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Add Category Selection */}
+        <FormField
+          control={form.control}
+          name="categories"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Categories</FormLabel>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {selectedCategories.map((category) => (
+                  <Badge
+                    key={category}
+                    variant="secondary"
+                    className="flex items-center gap-1"
+                  >
+                    {category}
+                    <X
+                      className="h-3 w-3 cursor-pointer"
+                      onClick={() => removeCategory(category)}
+                    />
+                  </Badge>
+                ))}
+              </div>
+              <Select onValueChange={handleCategorySelect} value="">
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PREDEFINED_CATEGORIES.map((category) => (
+                    <SelectItem
+                      key={category}
+                      value={category}
+                      disabled={selectedCategories.includes(category)}
+                    >
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
@@ -178,76 +281,31 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
             <FormItem>
               <FormLabel>Address</FormLabel>
               <FormControl>
-                <Textarea 
-                  placeholder="Supplier address" 
-                  {...field} 
-                  rows={3}
-                />
+                <Textarea placeholder="Supplier address" {...field} rows={3} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="categories"
-          render={() => (
-            <FormItem>
-              <FormLabel>Categories</FormLabel>
-              <div className="mb-2">
-                <Select onValueChange={handleCategorySelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories?.map((category) => (
-                      <SelectItem key={category.id} value={category.name}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedCategories.map((category) => (
-                  <Badge key={category} variant="secondary" className="flex items-center gap-1">
-                    {category}
-                    <button 
-                      type="button" 
-                      onClick={() => removeCategory(category)}
-                      className="rounded-full hover:bg-gray-200 p-1"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {selectedCategories.length === 0 && (
-                  <span className="text-sm text-gray-500">No categories selected</span>
-                )}
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
         <div className="flex justify-end gap-2 pt-2">
-          <Button 
-            type="button" 
-            variant="outline" 
+          <Button
+            type="button"
+            variant="outline"
             onClick={() => {
               if (onSuccess) onSuccess();
             }}
           >
             Cancel
           </Button>
-          <Button 
-            type="submit" 
-            disabled={addSupplierMutation.isPending}
-          >
-            {addSupplierMutation.isPending 
-              ? (supplier ? "Updating..." : "Adding...") 
-              : (supplier ? "Update Supplier" : "Add Supplier")}
+          <Button type="submit" disabled={addSupplierMutation.isLoading}>
+            {addSupplierMutation.isLoading
+              ? supplier
+                ? "Updating..."
+                : "Adding..."
+              : supplier
+              ? "Update Supplier"
+              : "Add Supplier"}
           </Button>
         </div>
       </form>
