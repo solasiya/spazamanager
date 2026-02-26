@@ -27,15 +27,16 @@ const pool = createPool({
   host: url.hostname,
   port: parseInt(url.port) || 3306,
   user: url.username,
-  password: url.password.includes('%40') ? decodeURIComponent(url.password) : url.password,
+  password: url.password, // URL constructor already decodes this
   database: url.pathname.replace(/^\//, '').split('?')[0],
   waitForConnections: true,
   connectionLimit: 5,
   idleTimeout: 30000,
   queueLimit: 0,
-  ...(process.env.DB_SSL === 'true' || url.searchParams.has('ssl') || url.searchParams.has('ssl-mode') ? {
-    ssl: { rejectUnauthorized: false }
-  } : {})
+  // Cloud providers (Aiven/Render) REQUIRE SSL in production
+  ssl: (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true' || url.searchParams.has('ssl-mode')) ? {
+    rejectUnauthorized: false
+  } : undefined
 });
 
 // Test connection without blocking export
