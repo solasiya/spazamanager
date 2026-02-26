@@ -11,60 +11,40 @@ if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
 }
 
 // Initialize Pool
-let poolConfig: any;
+let pool: any;
 
 if (process.env.DATABASE_URL) {
-  const url = new URL(process.env.DATABASE_URL);
-  poolConfig = {
-    host: url.hostname,
-    port: parseInt(url.port) || 3306,
-    user: url.username,
-    password: url.password,
-    database: url.pathname.replace(/^\//, '').split('?')[0],
-  };
+  console.log("📡 Connecting using DATABASE_URL...");
+  pool = createPool(process.env.DATABASE_URL);
 } else {
-  poolConfig = {
+  console.log("📡 Connecting using individual environment variables...");
+  const poolConfig = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '3306'),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME || 'spaza_db',
+    waitForConnections: true,
+    connectionLimit: 5,
+    idleTimeout: 30000,
+    queueLimit: 0,
+    ssl: (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true') ? {
+      rejectUnauthorized: false
+    } : undefined
   };
+  pool = createPool(poolConfig);
 }
 
-// Common pool settings
-const pool = createPool({
-  ...poolConfig,
-  waitForConnections: true,
-  connectionLimit: 5,
-  idleTimeout: 30000,
-  queueLimit: 0,
-  ssl: (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true') ? {
-    rejectUnauthorized: false
-  } : undefined
-});
-
-const maskPassword = (pw: string | undefined) => {
-  if (!pw) return 'MISSING';
-  return `${pw.substring(0, 2)}... (length: ${pw.length})`;
-};
-
-console.log(`📡 DB Connection Details:
-   Host: ${poolConfig.host}:${poolConfig.port}
-   User: ${poolConfig.user}
-   PW:   ${maskPassword(poolConfig.password)}
-`);
-
-// Test connection without blocking export
+// Test connection
 pool.getConnection()
-  .then(conn => {
-    console.log("✅ Database connected successfully to:", poolConfig.host);
+  .then((conn: any) => {
+    console.log("✅ Database connection verified successfully!");
     conn.release();
   })
-  .catch(err => {
+  .catch((err: any) => {
     console.error("❌ Database connection failed:", err.message);
     if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-      console.error("👉 TIP: Check if your DB_PASSWORD or DATABASE_URL is correct in Render Environment settings.");
+      console.error("👉 ACTION REQUIRED: Ensure you have clicked 'Save changes' on the Aiven IP Whitelist (0.0.0.0/0).");
     }
   });
 
