@@ -6,7 +6,10 @@ import session from 'express-session';
 import passport from 'passport';
 import { storage } from './storage';
 import path from 'path';
-import 'dotenv/config';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Network utility function
 function getLocalIp(): string {
@@ -110,21 +113,16 @@ app.use((req, res, next) => {
     // Static file serving for production
     if (process.env.NODE_ENV === 'production') {
       const publicPath = path.resolve(process.cwd(), 'dist', 'public');
-      app.use(express.static(publicPath, {
-        maxAge: '1y',
-        immutable: true
-      }));
+      app.use(express.static(publicPath));
 
       // Catch-all route to serve the SPA
       app.get('*', (req, res, next) => {
-        // Skip API routes
-        if (req.path.startsWith('/api')) {
-          return next();
-        }
+        if (req.path.startsWith('/api')) return next();
         res.sendFile(path.join(publicPath, 'index.html'));
       });
     } else {
-      const { setupVite } = await import("./vite");
+      // Only import Vite in development
+      const { setupVite } = await import("./vite.js");
       await setupVite(app, server);
     }
 

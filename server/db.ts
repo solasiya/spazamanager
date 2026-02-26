@@ -11,42 +11,42 @@ if (!DATABASE_URL) {
   );
 }
 
-// Initialize Pool with error handling
-let pool: Pool;
-try {
-  // Parse the DATABASE_URL
-  const url = new URL(DATABASE_URL);
-  
-  pool = createPool({
-    host: url.hostname,
-    port: parseInt(url.port) || 3306,
-    user: url.username,
-    password: url.password.includes('%40') ? 
-           decodeURIComponent(url.password) : 
-           url.password,
-    database: url.pathname.replace(/^\//, '').split('?')[0],
-    waitForConnections: true,
-    connectionLimit: 10, // Slightly reduced for multi-instance compatibility
-    idleTimeout: 30000,
-    queueLimit: 0,
-    // Add SSL support for cloud providers (like Aiven, DigitalOcean)
-    ...(process.env.DB_SSL === 'true' || url.searchParams.has('ssl') || url.searchParams.has('ssl-mode') ? {
-      ssl: {
-        rejectUnauthorized: false // Common setting for self-signed or CA-signed without file
-      }
-    } : {})
+// Global error handlers for better debugging on Render
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+  process.exit(1);
+});
+
+// Initialize Pool
+const url = new URL(DATABASE_URL);
+const pool = createPool({
+  host: url.hostname,
+  port: parseInt(url.port) || 3306,
+  user: url.username,
+  password: url.password.includes('%40') ? decodeURIComponent(url.password) : url.password,
+  database: url.pathname.replace(/^\//, '').split('?')[0],
+  waitForConnections: true,
+  connectionLimit: 5,
+  idleTimeout: 30000,
+  queueLimit: 0,
+  ...(process.env.DB_SSL === 'true' || url.searchParams.has('ssl') || url.searchParams.has('ssl-mode') ? {
+    ssl: { rejectUnauthorized: false }
+  } : {})
+});
+
+// Test connection without blocking export
+pool.getConnection()
+  .then(conn => {
+    console.log("✅ Database connected successfully");
+    conn.release();
+  })
+  .catch(err => {
+    console.error("❌ Database connection failed:", err.message);
   });
-
-  // Test connection
-  const conn = await pool.getConnection();
-  await conn.query('SELECT NOW()');
-  conn.release();
-  console.log("✅ Database connected successfully");
-
-} catch (err) {
-  console.error("❌ Failed to connect to database:", err instanceof Error ? err.message : err);
-  throw err; // Crash the app if DB connection fails
-}
 
 // Export Drizzle instance with schema
 export { pool };
