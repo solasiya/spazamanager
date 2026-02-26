@@ -8,7 +8,7 @@ export const users = mysqlTable("users", {
   username: varchar("username", { length: 255 }).notNull().unique(),
   password: varchar("password", { length: 255 }).notNull(),
   fullName: varchar("full_name", { length: 255 }).notNull(),
-  role: varchar("role", { length: 50 }).notNull().default("cashier"), // owner, cashier, stock_manager
+  role: varchar("role", { length: 50 }).notNull().default("cashier"), // superuser, owner, supervisor, cashier, stock_manager
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({

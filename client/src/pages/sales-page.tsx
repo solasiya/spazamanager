@@ -2,20 +2,40 @@ import { useState } from "react";
 import { Layout } from "@/components/layout/layout";
 import { PageHeader } from "@/components/layout/page-header";
 import { SalesTable } from "@/components/sales/sales-table";
-import { PlusCircle, FileText, BarChart2, TrendingUp, Calendar } from "lucide-react";
+import { PlusCircle, FileText, BarChart2, TrendingUp, Calendar, Download, Printer, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AddSaleForm } from "@/components/sales/add-sale-form";
 import { useQuery } from "@tanstack/react-query";
 import { Sale } from "@shared/schema";
+import { exportToCSV, printPage } from "@/lib/export-utils";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function SalesPage() {
   const [isAddSaleDialogOpen, setIsAddSaleDialogOpen] = useState(false);
+  const { toast } = useToast();
   
   const { data: sales, isLoading } = useQuery<Sale[]>({
     queryKey: ["/api/sales"],
   });
+
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["/api/sales"] });
+    toast({ title: "Refreshed", description: "Sales data has been updated." });
+  };
+
+  const handleExport = () => {
+    if (!sales || sales.length === 0) return;
+    exportToCSV(sales, "Sales_Report", {
+      id: "ID",
+      date: "Date",
+      total: "Total (R)",
+      paymentMethod: "Payment Method"
+    });
+    toast({ title: "Export Started", description: "Your sales report is downloading..." });
+  };
 
   // Calculate total sales for today, week, and month
   const now = new Date();
@@ -24,9 +44,9 @@ export default function SalesPage() {
   startOfWeek.setDate(now.getDate() - now.getDay());
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const todaySales = sales?.filter(sale => new Date(sale.date) >= startOfDay) || [];
-  const weekSales = sales?.filter(sale => new Date(sale.date) >= startOfWeek) || [];
-  const monthSales = sales?.filter(sale => new Date(sale.date) >= startOfMonth) || [];
+  const todaySales = sales?.filter(sale => sale.date && new Date(sale.date) >= startOfDay) || [];
+  const weekSales = sales?.filter(sale => sale.date && new Date(sale.date) >= startOfWeek) || [];
+  const monthSales = sales?.filter(sale => sale.date && new Date(sale.date) >= startOfMonth) || [];
 
   const calculateTotal = (items: Sale[]) => {
     return items.reduce((sum, sale) => sum + Number(sale.total), 0);
@@ -42,12 +62,35 @@ export default function SalesPage() {
         title="Sales"
         description="Record and track sales transactions, analyze sales data, and generate reports."
         actions={
-          <Button 
-            onClick={() => setIsAddSaleDialogOpen(true)}
-            className="bg-accent hover:bg-accent/90 text-white flex items-center gap-1"
-          >
-            <PlusCircle className="h-4 w-4" /> Record Sale
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              variant="outline" 
+              onClick={handleRefresh}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleExport}
+              className="flex items-center gap-1"
+            >
+              <Download className="h-4 w-4" /> Export
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={printPage}
+              className="flex items-center gap-1"
+            >
+              <Printer className="h-4 w-4" /> Print
+            </Button>
+            <Button 
+              onClick={() => setIsAddSaleDialogOpen(true)}
+              className="bg-accent hover:bg-accent/90 text-white flex items-center gap-1"
+            >
+              <PlusCircle className="h-4 w-4" /> Record Sale
+            </Button>
+          </div>
         }
       />
 

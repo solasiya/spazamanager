@@ -13,8 +13,8 @@ export default function UsersPage() {
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const { user } = useAuth();
 
-  // Redirect if not an owner
-  if (user && user.role !== "owner") {
+  // Redirect if not an owner, supervisor or superuser
+  if (user && user.role !== "owner" && user.role !== "superuser" && user.role !== "supervisor") {
     return <Redirect to="/" />;
   }
 

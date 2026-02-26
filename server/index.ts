@@ -1,14 +1,13 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
 import cors from "cors";
 import { networkInterfaces } from 'os';
-import { db, pool } from './db'; // Import your db instance
-import { sql } from 'drizzle-orm'; 
 import session from 'express-session';
 import passport from 'passport';
-import { MySQLSessionStore } from './storage';
-import MySQLStore from 'express-mysql-session'; // Changed from pgSession
+import { storage } from './storage';
+import path from 'path';
+import 'dotenv/config';
 
 // Network utility function
 function getLocalIp(): string {
@@ -26,9 +25,6 @@ function getLocalIp(): string {
   return 'localhost';
 }
 
-// Create MySQL session store
-const MySQLSessionStore = MySQLStore(session);
-
 const app = express();
 
 // Add CORS and body parsing middleware
@@ -37,27 +33,12 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// MySQL session configuration
+// Use the session store from storage
 app.use(session({
-  store: new MySQLSessionStore({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '3306'),
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || 'spaza_db',   // Your database name
-    createDatabaseTable: true,
-    schema: {
-      tableName: 'sessions',
-      columnNames: {
-        session_id: 'session_id',
-        expires: 'expires',
-        data: 'data'
-      }
-    }
-  }),
+  store: storage.sessionStore,
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
@@ -68,30 +49,7 @@ app.use(session({
 }));
 
 app.use(passport.initialize());
-app.use(passport.session()); // ← 🔥 VERY IMPORTANT!
-
-app.use(cors({
-  origin: process.env.NODE_ENV === 'development'
-    ? 'http://localhost:3000' // 👈 Replace with your frontend dev server
-    : process.env.FRONTEND_URL, // No array needed unless you allow multiple
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Authorization']
-}));
-
-// Security headers middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('X-Content-Type-Options', 'nosniff');
-  res.header('X-Frame-Options', 'DENY');
-  res.header('X-XSS-Protection', '1; mode=block');
-  next();
-});
-
-// Body parsers
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(passport.session());
 
 // Enhanced request logging middleware
 app.use((req, res, next) => {
@@ -121,65 +79,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// MySQL Database Initialization
-async function initializeDatabase() {
-  try {
-    // Verify connection
-    await db.execute(sql`SELECT 1`);
-    
-    // Check and create tables if needed
-    const [tables] = await db.execute(sql`
-      SELECT TABLE_NAME 
-      FROM INFORMATION_SCHEMA.TABLES 
-      WHERE TABLE_SCHEMA = DATABASE()
-    `);
-    
-    const requiredTables = ['users', 'categories', 'products', 'sessions'];
-    const missingTables = requiredTables.filter(table => 
-      !tables.some((t: any) => t.TABLE_NAME === table)
-    );
-
-    if (missingTables.length > 0) {
-      console.log('Creating missing tables:', missingTables);
-      
-      await db.transaction(async (tx) => {
-        if (missingTables.includes('users')) {
-          await tx.execute(sql`
-            CREATE TABLE users (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              username VARCHAR(255) NOT NULL UNIQUE,
-              password VARCHAR(255) NOT NULL,
-              role ENUM('admin', 'manager', 'staff') DEFAULT 'staff',
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            )
-          `);
-        }
-
-        if (missingTables.includes('categories')) {
-          await tx.execute(sql`
-            CREATE TABLE categories (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              name VARCHAR(255) NOT NULL,
-              slug VARCHAR(255) UNIQUE,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-          `);
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Database initialization failed:', error);
-    throw error;
-  }
-}
-
 // Server startup
 (async () => {
   try {
     console.log('🚀 Starting Spaza Manager server...');
-    console.log('📊 Initializing database...');
-    await initializeDatabase();
     
     console.log('🛣️  Registering routes...');
     const server = await registerRoutes(app);
@@ -205,14 +108,24 @@ async function initializeDatabase() {
       });
     });
 
-    // Vite setup for development
-    if (process.env.NODE_ENV === 'development') {
-      await setupVite(app, server);
-    } else {
-      app.use(express.static('dist/client', {
+    // Static file serving for production
+    if (process.env.NODE_ENV === 'production') {
+      const publicPath = path.resolve(process.cwd(), 'dist', 'public');
+      app.use(express.static(publicPath, {
         maxAge: '1y',
         immutable: true
       }));
+
+      // Catch-all route to serve the SPA
+      app.get('*', (req, res, next) => {
+        // Skip API routes
+        if (req.path.startsWith('/api')) {
+          return next();
+        }
+        res.sendFile(path.join(publicPath, 'index.html'));
+      });
+    } else {
+      await setupVite(app, server);
     }
 
     const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -224,7 +137,6 @@ async function initializeDatabase() {
       🚀 Server running in ${process.env.NODE_ENV} mode
       - Local: http://localhost:${PORT}
       - Network: http://${localIp}:${PORT}
-      - Database: ${process.env.DB_NAME}@${process.env.DB_HOST}
       `);
     });
 

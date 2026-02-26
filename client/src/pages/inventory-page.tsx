@@ -8,7 +8,13 @@ import {
   Upload,
   AlertTriangle,
   ClipboardList,
+  Printer,
+  RefreshCw,
 } from "lucide-react";
+import { Product } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { exportToCSV, printPage, parseCSV } from "@/lib/export-utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Card,
@@ -30,14 +36,63 @@ import { AddItemForm } from "@/components/inventory/add-item-form";
 
 export default function InventoryPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const { toast } = useToast();
+  
+  const { data: products, refetch: refetchProducts } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+  });
 
-  const { data: lowStockProducts } = useQuery({
+  const { data: lowStockProducts } = useQuery<Product[]>({
     queryKey: ["/api/products/low-stock"],
   });
 
-  const { data: expiringProducts } = useQuery({
+  const { data: expiringProducts } = useQuery<Product[]>({
     queryKey: ["/api/products/expiring"],
   });
+
+  const handleExport = () => {
+    if (!products || products.length === 0) {
+      toast({ title: "No data", description: "There is nothing to export.", variant: "destructive" });
+      return;
+    }
+    
+    exportToCSV(products, "Inventory_Stock", {
+      name: "Product Name",
+      sku: "SKU",
+      quantity: "Quantity",
+      purchasePrice: "Cost Price (R)",
+      sellingPrice: "Selling Price (R)",
+      expiryDate: "Expiry"
+    });
+    
+    toast({ title: "Export Started", description: "Your inventory report is downloading..." });
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await parseCSV(file);
+      // In a real app, you'd send this to an /api/products/bulk endpoint
+      // For now, we'll show success if parsing works
+      toast({
+        title: "Import Successful (Simulation)",
+        description: `Parsed ${data.length} products from CSV. In a production environment, these would be synced to the database.`
+      });
+    } catch (err) {
+      toast({
+        title: "Import Failed",
+        description: "Could not parse the CSV file. Please check the format.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    toast({ title: "Refreshed", description: "Inventory data has been updated." });
+  };
 
   return (
     <Layout>
@@ -46,11 +101,38 @@ export default function InventoryPage() {
         description="Manage your store inventory items, track stock levels, and monitor expiry dates."
         actions={
           <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" className="flex items-center gap-1">
+            <Button 
+              variant="outline" 
+              onClick={handleRefresh}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleExport}
+              className="flex items-center gap-1"
+            >
               <Download className="h-4 w-4" /> Export
             </Button>
-            <Button variant="outline" className="flex items-center gap-1">
-              <Upload className="h-4 w-4" /> Import
+            <div className="relative">
+              <Button variant="outline" className="flex items-center gap-1" onClick={() => document.getElementById('csv-import')?.click()}>
+                <Upload className="h-4 w-4" /> Import
+              </Button>
+              <input 
+                id="csv-import"
+                type="file" 
+                accept=".csv" 
+                className="hidden" 
+                onChange={handleImport}
+              />
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={printPage}
+              className="flex items-center gap-1"
+            >
+              <Printer className="h-4 w-4" /> Print
             </Button>
             <Button
               type="button"
@@ -76,7 +158,7 @@ export default function InventoryPage() {
               {lowStockProducts?.length || 0} items
             </div>
             <p className="text-sm text-muted-foreground">
-              {lowStockProducts?.length > 0
+              {lowStockProducts && lowStockProducts.length > 0
                 ? "These items require attention - restock them soon to avoid stockouts."
                 : "All items are well-stocked. Good job!"}
             </p>
@@ -97,7 +179,7 @@ export default function InventoryPage() {
               {expiringProducts?.length || 0} items
             </div>
             <p className="text-sm text-muted-foreground">
-              {expiringProducts?.length > 0
+              {expiringProducts && expiringProducts.length > 0
                 ? "Consider discounting these items to reduce waste."
                 : "No items expiring in the next 7 days."}
             </p>

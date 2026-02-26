@@ -11,8 +11,10 @@ import {
   Users,
   Settings,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LiveClock } from "./live-clock";
 
 type NavLinkProps = {
   href: string;
@@ -84,21 +86,24 @@ export function Sidebar({
       {/* User Info */}
       {user && (
         <div className="p-4 border-b border-sidebar-border">
-          <div className="flex items-center">
+          <div className="flex items-center mb-4">
             <div className="w-10 h-10 rounded-full bg-light flex items-center justify-center text-secondary font-bold">
-              {(user.fullName || user.full_name)
+              {user.fullName
                 ?.split(" ")
-                .map((n) => n[0])
+                .map((n: string) => n[0])
                 .join("")
                 .slice(0, 2)
                 .toUpperCase() || "U"}
             </div>
             <div className="ml-3">
               <p className="text-white font-semibold">
-                {user.fullName || user.full_name}
+                {user.fullName}
               </p>
               <p className="text-gray-300 text-sm capitalize">{user.role}</p>
             </div>
+          </div>
+          <div className="px-1">
+            <LiveClock />
           </div>
         </div>
       )}
@@ -121,9 +126,14 @@ export function Sidebar({
           <NavLink href="/reports" icon={<BarChart3 />} onClick={onClose}>
             Reports
           </NavLink>
-          {user?.role === "owner" && (
+          {(user?.role === "owner" || user?.role === "superuser" || user?.role === "supervisor") && (
             <NavLink href="/users" icon={<Users />} onClick={onClose}>
               Users
+            </NavLink>
+          )}
+          {user?.role === "superuser" && (
+            <NavLink href="/cms" icon={<ShieldCheck />} onClick={onClose}>
+              CMS Panel
             </NavLink>
           )}
           <NavLink href="/settings" icon={<Settings />} onClick={onClose}>

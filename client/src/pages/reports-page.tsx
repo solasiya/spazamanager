@@ -11,23 +11,116 @@ import {
   DollarSign, 
   Package, 
   Truck,
-  Download
+  Download,
+  Printer,
+  RefreshCw
 } from "lucide-react";
+import { Product, Sale, Restock, Category } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { exportToCSV, printPage } from "@/lib/export-utils";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ReportsPage() {
   const [dateRange, setDateRange] = useState("week");
+  const { toast } = useToast();
   
-  const { data: products } = useQuery({
+  const { data: products, isLoading: isLoadingProducts } = useQuery<Product[]>({
     queryKey: ["/api/products"],
   });
+
+  const handleRefresh = async () => {
+    await queryClient.invalidateQueries();
+    toast({ title: "Refreshed", description: "Reports data has been updated." });
+  };
+
+  const handleExport = () => {
+    // Generate a summary report
+    const summaryData = [
+      { Metric: "Total Sales", Value: `R ${totalSalesVal.toFixed(2)}` },
+      { Metric: "Profit Margin", Value: `${profitMargin}%` },
+      { Metric: "Items Sold", Value: totalItemsSold },
+      { Metric: "Transactions", Value: numTransactions },
+      { Metric: "Period", Value: dateRange }
+    ];
+    exportToCSV(summaryData, `Business_Summary_Report_${dateRange}`);
+    toast({ title: "Export Started", description: "Your summary report is downloading..." });
+  };
   
-  const { data: sales } = useQuery({
+  const { data: sales, isLoading: isLoadingSales } = useQuery<Sale[]>({
     queryKey: ["/api/sales"],
   });
+
+  const { data: restocks, isLoading: isLoadingRestocks } = useQuery<Restock[]>({
+    queryKey: ["/api/restocks"],
+  });
+
+  const { data: categories, isLoading: isLoadingCategories } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+  });
+
+  const isLoading = isLoadingProducts || isLoadingSales || isLoadingRestocks || isLoadingCategories;
+
+  // Filter data by date range
+  const getFilteredData = () => {
+    if (!sales || !restocks) return { filteredSales: [], filteredRestocks: [] };
+    
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch (dateRange) {
+      case "today":
+        startDate.setHours(0, 0, 0, 0);
+        break;
+      case "week":
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case "month":
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case "quarter":
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case "year":
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      case "custom":
+        // Default to all for now
+        startDate = new Date(0);
+        break;
+      default:
+        startDate = new Date(0);
+    }
+
+    const filteredSales = sales.filter(s => s.date && new Date(s.date) >= startDate);
+    const filteredRestocks = restocks.filter(r => r.date && new Date(r.date) >= startDate);
+    
+    return { filteredSales, filteredRestocks };
+  };
+
+  const { filteredSales, filteredRestocks } = getFilteredData();
+
+  // Calculations
+  const totalSalesVal = filteredSales.reduce((sum, sale) => sum + Number(sale.total), 0);
+  
+  const totalItemsSold = filteredSales.reduce((sum, sale) => {
+    const items = (sale.items as any[]) || [];
+    return sum + items.reduce((iSum, item) => iSum + Number(item.quantity), 0);
+  }, 0);
+
+  const totalCost = filteredSales.reduce((sum, sale) => {
+    const items = (sale.items as any[]) || [];
+    return sum + items.reduce((iSum, item) => {
+      const product = products?.find(p => p.id === item.productId);
+      return iSum + (Number(product?.purchasePrice || 0) * Number(item.quantity));
+    }, 0);
+  }, 0);
+
+  const profitMargin = totalSalesVal > 0 ? ((totalSalesVal - totalCost) / totalSalesVal * 100).toFixed(1) : "0.0";
+  const numTransactions = filteredSales.length;
 
   return (
     <Layout>
@@ -35,9 +128,29 @@ export default function ReportsPage() {
         title="Reports"
         description="Generate and view reports on sales, inventory, and other business metrics."
         actions={
-          <Button variant="outline" className="flex items-center gap-1">
-            <Download className="h-4 w-4" /> Export Reports
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleRefresh}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={printPage}
+              className="flex items-center gap-1"
+            >
+              <Printer className="h-4 w-4" /> Print
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleExport}
+              className="flex items-center gap-1"
+            >
+              <Download className="h-4 w-4" /> Export Summary
+            </Button>
+          </div>
         }
       />
 
@@ -54,7 +167,7 @@ export default function ReportsPage() {
             <option value="month">This Month</option>
             <option value="quarter">This Quarter</option>
             <option value="year">This Year</option>
-            <option value="custom">Custom Range</option>
+            <option value="custom">All Time</option>
           </select>
         </div>
 
@@ -66,13 +179,9 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">R 12,580.45</div>
-              <p className="text-xs text-muted-foreground">
-                {dateRange === "today" ? "Today" : 
-                 dateRange === "week" ? "This week" :
-                 dateRange === "month" ? "This month" : 
-                 dateRange === "quarter" ? "This quarter" : 
-                 dateRange === "year" ? "This year" : "Custom period"}
+              <div className="text-2xl font-bold">R {totalSalesVal.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground capitalize">
+                {dateRange === "custom" ? "Total across all time" : `${dateRange} period`}
               </p>
             </CardContent>
           </Card>
@@ -83,9 +192,9 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">32.4%</div>
-              <p className="text-xs text-success flex items-center">
-                <TrendingUp className="h-3 w-3 mr-1" /> 2.1% increase
+              <div className="text-2xl font-bold">{profitMargin}%</div>
+              <p className="text-xs text-muted-foreground">
+                Margin based on cost price
               </p>
             </CardContent>
           </Card>
@@ -96,22 +205,22 @@ export default function ReportsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">648</div>
+              <div className="text-2xl font-bold">{totalItemsSold}</div>
               <p className="text-xs text-muted-foreground">
-                98 transactions
+                {numTransactions} transactions
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-warning flex items-center gap-2 text-base">
-                <Clock className="h-4 w-4" /> Avg. Sale Time
+                <Truck className="h-4 w-4" /> Supplier Orders
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">4.5 min</div>
-              <p className="text-xs text-success flex items-center">
-                <TrendingUp className="h-3 w-3 mr-1" /> 0.3 min faster
+              <div className="text-2xl font-bold">{filteredRestocks.length}</div>
+              <p className="text-xs text-muted-foreground">
+                Receiving orders
               </p>
             </CardContent>
           </Card>
@@ -128,26 +237,78 @@ export default function ReportsPage() {
           <TabsContent value="sales">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ReportCard 
-                title="Sales Trend"
+                title="Sales Volume"
                 icon={<BarChart className="h-5 w-5" />}
                 content={
-                  <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-                    <div className="text-center">
-                      <BarChart className="h-16 w-16 mx-auto text-gray-300" />
-                      <p className="mt-2 text-gray-500">Sales trend chart would appear here</p>
+                  <div className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-lg p-6">
+                    <div className="text-center w-full">
+                      <BarChart className="h-12 w-12 mx-auto text-primary mb-2 opacity-50" />
+                      <p className="text-sm font-semibold">Sales Statistics</p>
+                      <div className="mt-4 space-y-3">
+                        <div className="flex justify-between text-xs p-2 bg-white rounded border border-gray-100">
+                          <span className="text-muted-foreground">Highest Sale</span>
+                          <span className="font-bold whitespace-nowrap ml-2">R {filteredSales.length > 0 ? Math.max(...filteredSales.map(s => Number(s.total))).toFixed(2) : "0.00"}</span>
+                        </div>
+                        <div className="flex justify-between text-xs p-2 bg-white rounded border border-gray-100">
+                          <span className="text-muted-foreground">Average Order Value</span>
+                          <span className="font-bold whitespace-nowrap ml-2">R {numTransactions > 0 ? (totalSalesVal / numTransactions).toFixed(2) : "0.00"}</span>
+                        </div>
+                        <div className="flex justify-between text-xs p-2 bg-white rounded border border-gray-100">
+                          <span className="text-muted-foreground">Total Transactions</span>
+                          <span className="font-bold whitespace-nowrap ml-2">{numTransactions}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 }
               />
               <ReportCard 
-                title="Payment Methods"
+                title="Daily Activity"
                 icon={<PieChart className="h-5 w-5" />}
                 content={
-                  <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-                    <div className="text-center">
-                      <PieChart className="h-16 w-16 mx-auto text-gray-300" />
-                      <p className="mt-2 text-gray-500">Payment methods chart would appear here</p>
-                    </div>
+                  <div className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-lg p-6">
+                    {filteredSales.length > 0 ? (
+                      <div className="w-full h-full flex flex-col justify-center">
+                        <p className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Sales Activity by Day</p>
+                        <div className="flex items-end justify-between h-32 gap-1 px-2">
+                           {(() => {
+                             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                             const today = new Date();
+                             const last7Days = Array.from({length: 7}, (_, i) => {
+                               const d = new Date();
+                               d.setDate(today.getDate() - (6 - i));
+                               return d;
+                             });
+                             
+                             const daySales = last7Days.map(d => {
+                               const total = filteredSales
+                                 .filter(s => s.date && new Date(s.date).toDateString() === d.toDateString())
+                                 .reduce((sum, s) => sum + Number(s.total), 0);
+                               return { day: days[d.getDay()], total };
+                             });
+                             
+                             const max = Math.max(...daySales.map(d => d.total), 1);
+                             
+                             return daySales.map((d, i) => (
+                               <div key={i} className="flex-1 flex flex-col items-center">
+                                 <div 
+                                   className="w-full bg-primary rounded-t-sm transition-all duration-500 hover:bg-primary/80 cursor-help" 
+                                   style={{ height: `${(d.total / max * 100)}%` }}
+                                   title={`R ${d.total.toFixed(2)}`}
+                                 ></div>
+                                 <span className="text-[10px] mt-1 text-muted-foreground font-bold">{d.day}</span>
+                               </div>
+                             ));
+                           })()}
+                        </div>
+                        <p className="text-[10px] text-center mt-4 text-muted-foreground italic">Last 7 days of activity</p>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Clock className="h-12 w-12 mx-auto text-gray-300 mb-2" />
+                        <p className="text-sm text-muted-foreground">No recent sales activity to visualize.</p>
+                      </div>
+                    )}
                   </div>
                 }
               />
@@ -157,25 +318,37 @@ export default function ReportsPage() {
           <TabsContent value="inventory">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ReportCard 
-                title="Stock Level Overview"
+                title="Stock Level Summary"
                 icon={<Package className="h-5 w-5" />}
                 content={
-                  <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-                    <div className="text-center">
-                      <Package className="h-16 w-16 mx-auto text-gray-300" />
-                      <p className="mt-2 text-gray-500">Stock level chart would appear here</p>
+                  <div className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-lg p-6">
+                    <div className="text-center w-full space-y-4">
+                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                        <span className="text-sm font-medium">Out of Stock</span>
+                        <span className="text-xl font-bold text-primary">{products?.filter(p => p.quantity === 0).length || 0}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                        <span className="text-sm font-medium">Low Stock</span>
+                        <span className="text-xl font-bold text-warning">{products?.filter(p => p.quantity > 0 && p.quantity <= (p.alertThreshold || 5)).length || 0}</span>
+                      </div>
+                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                        <span className="text-sm font-medium">In Stock</span>
+                        <span className="text-xl font-bold text-success">{products?.filter(p => p.quantity > (p.alertThreshold || 5)).length || 0}</span>
+                      </div>
                     </div>
                   </div>
                 }
               />
               <ReportCard 
-                title="Inventory Value"
+                title="Inventory Assets"
                 icon={<DollarSign className="h-5 w-5" />}
                 content={
-                  <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
+                  <div className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-lg p-6">
                     <div className="text-center">
-                      <DollarSign className="h-16 w-16 mx-auto text-gray-300" />
-                      <p className="mt-2 text-gray-500">Inventory value chart would appear here</p>
+                      <DollarSign className="h-12 w-12 mx-auto text-primary mb-2" />
+                      <p className="text-sm font-semibold">Total Assets Value</p>
+                      <p className="text-2xl font-bold mt-2">R {(products?.reduce((sum, p) => sum + (Number(p.purchasePrice) * p.quantity), 0) || 0).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-2">Combined value of all items currently in stock at purchase price.</p>
                     </div>
                   </div>
                 }
@@ -190,86 +363,70 @@ export default function ReportsPage() {
                 icon={<TrendingUp className="h-5 w-5" />}
                 content={
                   <div className="h-64 overflow-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2">Product</th>
-                          <th className="text-center py-2">Qty Sold</th>
-                          <th className="text-right py-2">Revenue</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b">
-                          <td className="py-2">Coca-Cola 300ml</td>
-                          <td className="text-center">158</td>
-                          <td className="text-right">R 2,528.00</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">White Bread</td>
-                          <td className="text-center">112</td>
-                          <td className="text-right">R 1,400.00</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Fresh Milk 1L</td>
-                          <td className="text-center">95</td>
-                          <td className="text-right">R 1,899.05</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Sunlight Soap</td>
-                          <td className="text-center">78</td>
-                          <td className="text-right">R 663.00</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2">Lucky Star Pilchards</td>
-                          <td className="text-center">67</td>
-                          <td className="text-right">R 1,540.33</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                    {filteredSales.length > 0 ? (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Product</th>
+                            <th className="text-center py-2">Qty Sold</th>
+                            <th className="text-right py-2">Revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const productSales: Record<number, { name: string, qty: number, revenue: number }> = {};
+                            filteredSales.forEach(sale => {
+                              (sale.items as any[]).forEach(item => {
+                                const product = products?.find(p => p.id === item.productId);
+                                if (!productSales[item.productId]) {
+                                  productSales[item.productId] = { name: product?.name || "Unknown", qty: 0, revenue: 0 };
+                                }
+                                productSales[item.productId].qty += Number(item.quantity);
+                                productSales[item.productId].revenue += Number(item.price) * Number(item.quantity);
+                              });
+                            });
+                            return Object.values(productSales)
+                              .sort((a, b) => b.revenue - a.revenue)
+                              .slice(0, 5)
+                              .map((ps, i) => (
+                                <tr key={i} className="border-b">
+                                  <td className="py-2">{ps.name}</td>
+                                  <td className="text-center">{ps.qty}</td>
+                                  <td className="text-right">R {ps.revenue.toFixed(2)}</td>
+                                </tr>
+                              ));
+                          })()}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <Package className="h-8 w-8 mb-2 opacity-20" />
+                        <p>No sales data recorded yet.</p>
+                      </div>
+                    )}
                   </div>
                 }
               />
               <ReportCard 
-                title="Least Profitable Products"
-                icon={<TrendingUp className="h-5 w-5 rotate-180" />}
+                title="Inventory Health"
+                icon={<BarChart className="h-5 w-5" />}
                 content={
-                  <div className="h-64 overflow-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2">Product</th>
-                          <th className="text-center py-2">Profit Margin</th>
-                          <th className="text-right py-2">Profit</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b">
-                          <td className="py-2">Bread Rolls (6pk)</td>
-                          <td className="text-center">8.5%</td>
-                          <td className="text-right">R 102.00</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Sugar 2kg</td>
-                          <td className="text-center">9.2%</td>
-                          <td className="text-right">R 157.40</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Eggs (12pk)</td>
-                          <td className="text-center">11.3%</td>
-                          <td className="text-right">R 180.80</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Cooking Oil 1L</td>
-                          <td className="text-center">12.8%</td>
-                          <td className="text-right">R 205.12</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2">Washing Powder</td>
-                          <td className="text-center">14.2%</td>
-                          <td className="text-right">R 233.60</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                  <div className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-lg">
+                    <div className="text-center p-4">
+                      <TrendingUp className="h-12 w-12 mx-auto text-primary mb-2" />
+                      <p className="text-sm font-medium">Inventory vs Sales Data</p>
+                      <p className="text-xs text-muted-foreground mt-1">Real-time tracking of stock movements and profit yields per item.</p>
+                      <div className="mt-4 grid grid-cols-2 gap-4">
+                        <div className="bg-white p-2 rounded shadow-sm border border-gray-100">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold">In Stock</p>
+                          <p className="text-lg font-bold">{products?.reduce((sum, p) => sum + p.quantity, 0) || 0}</p>
+                        </div>
+                        <div className="bg-white p-2 rounded shadow-sm border border-gray-100">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Sales</p>
+                          <p className="text-lg font-bold">{numTransactions}</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 }
               />
@@ -279,13 +436,40 @@ export default function ReportsPage() {
           <TabsContent value="categories">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ReportCard 
-                title="Sales by Category"
+                title="Sales Distribution"
                 icon={<PieChart className="h-5 w-5" />}
                 content={
-                  <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
-                    <div className="text-center">
-                      <PieChart className="h-16 w-16 mx-auto text-gray-300" />
-                      <p className="mt-2 text-gray-500">Category sales chart would appear here</p>
+                  <div className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-lg p-4">
+                    <PieChart className="h-12 w-12 mx-auto text-primary mb-2 opacity-50" />
+                    <p className="text-sm font-medium">Category Market Share</p>
+                    <div className="mt-4 w-full space-y-2">
+                      {(() => {
+                        const catSales: Record<number, number> = {};
+                        filteredSales.forEach(sale => {
+                          (sale.items as any[]).forEach(item => {
+                            const product = products?.find(p => p.id === item.productId);
+                            if (product?.categoryId) {
+                              catSales[product.categoryId] = (catSales[product.categoryId] || 0) + (Number(item.price) * Number(item.quantity));
+                            }
+                          });
+                        });
+                        return Object.entries(catSales)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 3)
+                          .map(([id, rev], i) => {
+                            const cat = categories?.find(c => c.id === Number(id));
+                            const percent = totalSalesVal > 0 ? (rev / totalSalesVal * 100).toFixed(0) : 0;
+                            return (
+                              <div key={i} className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">{cat?.name || "Misc"}</span>
+                                <div className="flex-1 mx-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary" style={{ width: `${percent}%` }}></div>
+                                </div>
+                                <span className="font-bold">{percent}%</span>
+                              </div>
+                            );
+                          });
+                      })()}
                     </div>
                   </div>
                 }
@@ -295,42 +479,48 @@ export default function ReportsPage() {
                 icon={<BarChart className="h-5 w-5" />}
                 content={
                   <div className="h-64 overflow-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2">Category</th>
-                          <th className="text-center py-2">Items Sold</th>
-                          <th className="text-right py-2">Revenue</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b">
-                          <td className="py-2">Beverages</td>
-                          <td className="text-center">235</td>
-                          <td className="text-right">R 4,582.50</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Bakery</td>
-                          <td className="text-center">187</td>
-                          <td className="text-right">R 2,340.20</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Dairy</td>
-                          <td className="text-center">153</td>
-                          <td className="text-right">R 2,950.75</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="py-2">Canned Goods</td>
-                          <td className="text-center">98</td>
-                          <td className="text-right">R 2,156.00</td>
-                        </tr>
-                        <tr>
-                          <td className="py-2">Cleaning</td>
-                          <td className="text-center">67</td>
-                          <td className="text-right">R 1,251.00</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                    {filteredSales.length > 0 ? (
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left py-2">Category</th>
+                            <th className="text-center py-2">Items Sold</th>
+                            <th className="text-right py-2">Revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const catPerf: Record<number, { name: string, qty: number, revenue: number }> = {};
+                            filteredSales.forEach(sale => {
+                              (sale.items as any[]).forEach(item => {
+                                const product = products?.find(p => p.id === item.productId);
+                                const categoryId = product?.categoryId || 0;
+                                if (!catPerf[categoryId]) {
+                                  const cat = categories?.find(c => c.id === categoryId);
+                                  catPerf[categoryId] = { name: cat?.name || "Uncategorized", qty: 0, revenue: 0 };
+                                }
+                                catPerf[categoryId].qty += Number(item.quantity);
+                                catPerf[categoryId].revenue += Number(item.price) * Number(item.quantity);
+                              });
+                            });
+                            return Object.values(catPerf)
+                              .sort((a, b) => b.revenue - a.revenue)
+                              .map((cp, i) => (
+                                <tr key={i} className="border-b">
+                                  <td className="py-2">{cp.name}</td>
+                                  <td className="text-center">{cp.qty}</td>
+                                  <td className="text-right">R {cp.revenue.toFixed(2)}</td>
+                                </tr>
+                              ));
+                          })()}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                        <BarChart className="h-8 w-8 mb-2 opacity-20" />
+                        <p>No category data available.</p>
+                      </div>
+                    )}
                   </div>
                 }
               />
@@ -340,58 +530,57 @@ export default function ReportsPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ReportCard 
-            title="Supplier Orders"
+            title="Recent Supplier Activity"
             icon={<Truck className="h-5 w-5" />}
             content={
               <div className="h-64 overflow-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2">Supplier</th>
-                      <th className="text-center py-2">Last Order</th>
-                      <th className="text-right py-2">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b">
-                      <td className="py-2">SuperWholesale</td>
-                      <td className="text-center">3 days ago</td>
-                      <td className="text-right">R 4,250.00</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="py-2">Fresh Foods</td>
-                      <td className="text-center">Yesterday</td>
-                      <td className="text-right">R 1,750.50</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="py-2">Budget Basics</td>
-                      <td className="text-center">1 week ago</td>
-                      <td className="text-right">R 2,300.00</td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="py-2">Beverage Direct</td>
-                      <td className="text-center">2 days ago</td>
-                      <td className="text-right">R 3,120.75</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2">Cleaning Supplies Co.</td>
-                      <td className="text-center">5 days ago</td>
-                      <td className="text-right">R 985.30</td>
-                    </tr>
-                  </tbody>
-                </table>
+                {filteredRestocks.length > 0 ? (
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2">Product/Activity</th>
+                        <th className="text-center py-2">Quantity</th>
+                        <th className="text-right py-2">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRestocks.slice(0, 5).map((r, i) => (
+                        <tr key={i} className="border-b">
+                          <td className="py-2">Restock Session #{r.id}</td>
+                          <td className="text-center">{(() => {
+                            const items = (r.items as any[]) || [];
+                            return items.reduce((sum, item) => sum + Number(item.quantity), 0);
+                          })()}</td>
+                          <td className="text-right">R {Number(r.total).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+                    <Truck className="h-8 w-8 mb-2 opacity-20" />
+                    <p>No supplier orders in this period.</p>
+                  </div>
+                )}
               </div>
             }
           />
           <ReportCard 
-            title="Expiring Products Value"
+            title="Expired Inventory Risk"
             icon={<Clock className="h-5 w-5" />}
             content={
-              <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
+              <div className="h-64 flex flex-col items-center justify-center bg-gray-50 rounded-lg p-6">
                 <div className="text-center">
-                  <Clock className="h-16 w-16 mx-auto text-gray-300" />
-                  <p className="mt-2 text-gray-500">Expiring products value chart would appear here</p>
-                  <p className="font-bold mt-2">Total Value: R 1,865.50</p>
+                  <Clock className="h-12 w-12 mx-auto text-primary mb-2" />
+                  <p className="text-sm font-semibold">Loss Prevention Tracking</p>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">Identifying products nearing expiration to minimize potential losses through discounting or returns.</p>
+                  <div className="mt-4 p-3 bg-white rounded-lg border border-gray-100 shadow-sm w-full">
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Potential Loss</p>
+                    <p className="text-2xl font-bold text-primary">R {
+                      products?.filter(p => p.expiryDate && new Date(p.expiryDate) < new Date())
+                        .reduce((sum, p) => sum + (Number(p.purchasePrice) * p.quantity), 0).toFixed(2) || "0.00"
+                    }</p>
+                  </div>
                 </div>
               </div>
             }

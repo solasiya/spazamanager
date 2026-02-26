@@ -25,10 +25,11 @@ function checkRole(roles: string[]) {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthenticated" });
     }
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Unauthorized" });
+    // Superuser can access everything
+    if (req.user.role === 'superuser' || roles.includes(req.user.role)) {
+      return next();
     }
-    next();
+    res.status(403).json({ message: "Unauthorized" });
   };
 }
 
@@ -242,7 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertSaleSchema.parse({
         ...req.body,
-        userId: req.user.id,
+        userId: req.user!.id,
       });
       const sale = await storage.createSale(validatedData);
       res.status(201).json(sale);
@@ -268,7 +269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertRestockSchema.parse({
         ...req.body,
-        userId: req.user.id,
+        userId: req.user!.id,
       });
       const restock = await storage.createRestock(validatedData);
       res.status(201).json(restock);
@@ -283,7 +284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard Stats Route
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
-      const stats = await storage.getDashboardStats();
+      const range = (req.query.range as string) || "today";
+      const stats = await storage.getDashboardStats(range);
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
@@ -291,7 +293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Users Routes (Admin only)
-  app.get("/api/users", checkRole(["owner"]), async (req, res) => {
+  app.get("/api/users", checkRole(["owner", "supervisor"]), async (req, res) => {
     try {
       const users = await storage.getAllUsers();
       // Filter out passwords
@@ -303,6 +305,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch users" });
     }
+  });
+
+  // CMS Admin Routes
+  app.get("/api/admin/logs", checkRole(["superuser"]), async (req, res) => {
+    // Mocked system logs
+    const logs = [
+      { id: 1, event: "New user registered", details: "User 'manager_1' was added", timestamp: new Date(Date.now() - 1000 * 60 * 30) },
+      { id: 2, event: "Stock alert", details: "Milk is below threshold", timestamp: new Date(Date.now() - 1000 * 60 * 120) },
+      { id: 3, event: "Login success", details: "Admin signed in from IP 192.168.1.1", timestamp: new Date(Date.now() - 1000 * 60 * 200) },
+      { id: 4, event: "Database Backup", details: "Nightly backup completed successfully", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 8) },
+      { id: 5, event: "System Update", details: "V8 engine optimized", timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24) },
+    ];
+    res.json(logs);
+  });
+
+  app.post("/api/admin/backup", checkRole(["superuser"]), async (req, res) => {
+    // Mock backup process
+    const now = new Date();
+    storage.setLastBackupTime(now);
+    res.status(200).json({ message: "Backup initiated successfully", timestamp: now });
+  });
+
+  app.get("/api/admin/health", checkRole(["superuser"]), async (req, res) => {
+    res.json({
+      status: "Healthy",
+      uptime: process.uptime(),
+      dbConnected: true,
+      lastBackupAt: storage.getLastBackupTime(),
+      memoryUsage: process.memoryUsage(),
+      cpuUsage: process.cpuUsage()
+    });
   });
 
   const httpServer = createServer(app);

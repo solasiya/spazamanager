@@ -21,7 +21,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-export function InventoryTable() {
+interface InventoryTableProps {
+  filterType?: "all" | "low-stock" | "expiring";
+}
+
+export function InventoryTable({ filterType = "all" }: InventoryTableProps) {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -29,8 +33,19 @@ export function InventoryTable() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
-  const { data: products, isLoading: isLoadingProducts } = useQuery<Product[]>({
+  const { data: products, isLoading: isLoadingProducts, refetch: refetchProducts } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+    enabled: true, // Always fetch base products for 'all' and local filtering
+  });
+
+  const { data: lowStockProducts, isLoading: isLoadingLowStock } = useQuery<Product[]>({
+    queryKey: ["/api/products/low-stock"],
+    enabled: filterType === "low-stock",
+  });
+
+  const { data: expiringProducts, isLoading: isLoadingExpiring } = useQuery<Product[]>({
+    queryKey: ["/api/products/expiring"],
+    enabled: filterType === "expiring",
   });
 
   const { data: categories, isLoading: isLoadingCategories } = useQuery<Category[]>({
@@ -54,10 +69,24 @@ export function InventoryTable() {
   };
 
   const filteredProducts = products?.filter(product => {
+    // Search filter
     const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase()) ||
       product.sku?.toLowerCase().includes(search.toLowerCase());
+    
+    // Category filter
     const matchesCategory = categoryFilter === "all" || product.categoryId?.toString() === categoryFilter;
-    return matchesSearch && matchesCategory;
+    
+    // Quick filter (from props)
+    let matchesType = true;
+    if (filterType === "low-stock") {
+      matchesType = product.quantity <= (product.alertThreshold || 10);
+    } else if (filterType === "expiring") {
+      const weekFromNow = new Date();
+      weekFromNow.setDate(weekFromNow.getDate() + 7);
+      matchesType = !!product.expiryDate && new Date(product.expiryDate) <= weekFromNow && new Date(product.expiryDate) >= new Date();
+    }
+    
+    return matchesSearch && matchesCategory && matchesType;
   });
 
   const handleDeleteProduct = async () => {
@@ -87,7 +116,7 @@ export function InventoryTable() {
           Out of Stock
         </span>
       );
-    } else if (product.quantity <= product.alertThreshold) {
+    } else if (product.quantity <= (product.alertThreshold ?? 10)) {
       return (
         <span className="bg-warning/10 text-warning px-2 py-1 rounded text-xs">
           Low Stock ({product.quantity})
@@ -178,11 +207,11 @@ export function InventoryTable() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{getCategoryName(product.categoryId)}</TableCell>
+                    <TableCell>{getCategoryName(product.categoryId ?? undefined)}</TableCell>
                     <TableCell>{getStatusBadge(product)}</TableCell>
-                    <TableCell>{getSupplierName(product.supplierId)}</TableCell>
-                    <TableCell>R {Number(product.purchasePrice).toFixed(2)}</TableCell>
-                    <TableCell>R {Number(product.sellingPrice).toFixed(2)}</TableCell>
+                    <TableCell>{getSupplierName(product.supplierId ?? undefined)}</TableCell>
+                    <TableCell>R {Number(product.purchasePrice || 0).toFixed(2)}</TableCell>
+                    <TableCell>R {Number(product.sellingPrice || 0).toFixed(2)}</TableCell>
                     <TableCell>
                       {product.expiryDate 
                         ? format(new Date(product.expiryDate), "dd MMM yyyy") 

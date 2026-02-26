@@ -28,8 +28,8 @@ export function setupAuth(app: Express) {
     cookie: {
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       httpOnly: true,
-      secure: false, // Set to false for development
-      sameSite: 'lax', // More permissive for development
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       path: '/',
       domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined
     }
@@ -277,11 +277,8 @@ app.get("/api/debug/session-read", (req, res) => {
           const userForClient = {
             id: userWithoutPassword.id,
             username: userWithoutPassword.username,
-            fullName: (userWithoutPassword as any).full_name,
+            fullName: userWithoutPassword.fullName,
             role: userWithoutPassword.role,
-            is_active: (userWithoutPassword as any).is_active,
-            created_at: (userWithoutPassword as any).created_at,
-            updated_at: (userWithoutPassword as any).updated_at
           };
           console.log(`[AUTH] Successful login for user: ${user.username}`);
           res.status(200).json({
@@ -345,11 +342,8 @@ app.get("/api/debug/session-read", (req, res) => {
       const userForClient = {
         id: userWithoutPassword.id,
         username: userWithoutPassword.username,
-        fullName: (userWithoutPassword as any).full_name,
+        fullName: userWithoutPassword.fullName,
         role: userWithoutPassword.role,
-        is_active: (userWithoutPassword as any).is_active,
-        created_at: (userWithoutPassword as any).created_at,
-        updated_at: (userWithoutPassword as any).updated_at
       };
       console.log(`[AUTH] Returning user data for: ${req.user.username}`);
       res.json({

@@ -1,4 +1,4 @@
-import { createPool } from 'mysql2/promise';
+import { createPool, type Pool } from 'mysql2/promise';
 import { drizzle } from 'drizzle-orm/mysql2';
 import * as schema from "@shared/schema";
 import 'dotenv/config';
@@ -11,13 +11,8 @@ if (!DATABASE_URL) {
   );
 }
 
-console.log('Env check:', {
-  dbUrl: process.env.DATABASE_URL,
-  nodeEnv: process.env.NODE_ENV
-});
-
 // Initialize Pool with error handling
-let pool;
+let pool: Pool;
 try {
   // Parse the DATABASE_URL
   const url = new URL(DATABASE_URL);
@@ -31,9 +26,15 @@ try {
            url.password,
     database: url.pathname.replace(/^\//, '').split('?')[0],
     waitForConnections: true,
-    connectionLimit: 20, // max number of connections in the pool
+    connectionLimit: 10, // Slightly reduced for multi-instance compatibility
     idleTimeout: 30000,
-    queueLimit: 0
+    queueLimit: 0,
+    // Add SSL support for cloud providers (like Aiven, DigitalOcean)
+    ...(process.env.DB_SSL === 'true' || url.searchParams.has('ssl') ? {
+      ssl: {
+        rejectUnauthorized: false // Common setting for self-signed or CA-signed without file
+      }
+    } : {})
   });
 
   // Test connection

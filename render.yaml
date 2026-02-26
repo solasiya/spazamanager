@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: spaza-manager
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: spaza-db
+          property: connectionString
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DB_SSL
+        value: "true"
+
+databases:
+  - name: spaza-db
+    databaseName: spaza_manager
+    user: spaza_user
+    plan: free

@@ -46,7 +46,7 @@ export function AddUserForm({ user, onSuccess }: AddUserFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       username: user?.username || "",
-              fullName: user?.fullName || user?.full_name || "",
+      fullName: user?.fullName || "",
       role: user?.role || "cashier",
       password: "",
       confirmPassword: "",
@@ -69,7 +69,7 @@ export function AddUserForm({ user, onSuccess }: AddUserFormProps) {
         return await res.json();
       } else {
         // Create new user
-        const res = await apiRequest("POST", "/api/register", userData);
+        const res = await apiRequest("POST", "/api/auth/register", userData);
         return await res.json();
       }
     },
@@ -78,7 +78,7 @@ export function AddUserForm({ user, onSuccess }: AddUserFormProps) {
       toast({
         title: user ? "User updated" : "User created",
         description: user 
-          ? `${user.fullName || user.full_name} has been updated successfully` 
+          ? `${user.fullName} has been updated successfully` 
           : "The new user has been created successfully",
       });
       form.reset();
@@ -144,19 +144,25 @@ export function AddUserForm({ user, onSuccess }: AddUserFormProps) {
                     <FormControl>
                       <RadioGroupItem value="owner" />
                     </FormControl>
-                    <FormLabel className="font-normal">Owner</FormLabel>
+                    <FormLabel className="font-normal font-bold text-primary">Admin (Store Owner)</FormLabel>
                   </FormItem>
                   <FormItem className="flex items-center space-x-3 space-y-0">
                     <FormControl>
-                      <RadioGroupItem value="cashier" />
+                      <RadioGroupItem value="supervisor" />
                     </FormControl>
-                    <FormLabel className="font-normal">Cashier</FormLabel>
+                    <FormLabel className="font-normal">Supervisor (Manager)</FormLabel>
                   </FormItem>
                   <FormItem className="flex items-center space-x-3 space-y-0">
                     <FormControl>
                       <RadioGroupItem value="stock_manager" />
                     </FormControl>
                     <FormLabel className="font-normal">Stock Manager</FormLabel>
+                  </FormItem>
+                  <FormItem className="flex items-center space-x-3 space-y-0">
+                    <FormControl>
+                      <RadioGroupItem value="cashier" />
+                    </FormControl>
+                    <FormLabel className="font-normal">Simple User (Cashier)</FormLabel>
                   </FormItem>
                 </RadioGroup>
               </FormControl>

@@ -12,6 +12,8 @@ import {
   Edit, 
   Trash2, 
   Shield, 
+  ShieldCheck,
+  UserCheck,
   ShoppingCart, 
   PackageOpen,
   MoreHorizontal,
@@ -79,8 +81,12 @@ export function UsersTable() {
 
   const getRoleIcon = (role: string) => {
     switch (role) {
+      case "superuser":
+        return <ShieldCheck className="h-4 w-4 text-indigo-600" />;
       case "owner":
         return <Shield className="h-4 w-4 text-primary" />;
+      case "supervisor":
+        return <UserCheck className="h-4 w-4 text-blue-500" />;
       case "cashier":
         return <ShoppingCart className="h-4 w-4 text-accent" />;
       case "stock_manager":
@@ -92,8 +98,12 @@ export function UsersTable() {
 
   const getRoleBadgeClass = (role: string) => {
     switch (role) {
+      case "superuser":
+        return "bg-indigo-100 text-indigo-700 border border-indigo-200";
       case "owner":
-        return "bg-primary/10 text-primary";
+        return "bg-primary/10 text-primary border border-primary/20";
+      case "supervisor":
+        return "bg-blue-100 text-blue-700 border border-blue-200";
       case "cashier":
         return "bg-accent/10 text-accent";
       case "stock_manager":
@@ -145,9 +155,9 @@ export function UsersTable() {
                 <TableCell>
                   <div className="flex items-center">
                     <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium mr-2">
-                      {(user.fullName || user.full_name)?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                      {user.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                     </div>
-                                          {user.fullName || user.full_name}
+                    {user.fullName}
                   </div>
                 </TableCell>
                 <TableCell>{user.username}</TableCell>
@@ -205,7 +215,7 @@ export function UsersTable() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {userToDelete?.fullName || userToDelete?.full_name} from the system.
+              This will permanently delete {userToDelete?.fullName} from the system.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
