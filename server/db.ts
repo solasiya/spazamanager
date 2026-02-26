@@ -3,11 +3,10 @@ import { drizzle } from 'drizzle-orm/mysql2';
 import * as schema from "@shared/schema";
 import 'dotenv/config';
 
-// Validate DATABASE_URL early
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
+// Validate Database Configuration
+if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
   throw new Error(
-    "DATABASE_URL must be set in .env. Example: mysql://user:pass@host:port/db",
+    "Database configuration is missing. Please set DATABASE_URL or DB_HOST/DB_PASSWORD in your environment.",
   );
 }
 
