@@ -79,15 +79,11 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
         purchasePrice: parseFloat(values.purchasePrice),
         sellingPrice: parseFloat(values.sellingPrice),
         categoryId:
-          values.categoryId !== undefined
-            ? parseInt(values.categoryId.toString())
-            : undefined,
+          values.categoryId ?? undefined,
         supplierId:
-          values.supplierId !== undefined
-            ? parseInt(values.supplierId.toString())
-            : undefined,
-        quantity: parseInt(values.quantity.toString()),
-        alertThreshold: parseInt(values.alertThreshold.toString()),
+          values.supplierId ?? undefined,
+        quantity: parseInt((values.quantity ?? 0).toString()),
+        alertThreshold: parseInt((values.alertThreshold ?? 0).toString()),
         expiryDate: values.expiryDate ? new Date(values.expiryDate) : undefined,
       };
 
@@ -175,7 +171,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
               <FormItem>
                 <FormLabel>SKU</FormLabel>
                 <FormControl>
-                  <Input placeholder="Product SKU" {...field} />
+                  <Input placeholder="Product SKU" {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -195,7 +191,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
                     field.onChange(val === "__none" ? undefined : parseInt(val))
                   }
                   value={
-                    field.value !== undefined
+                    field.value !== undefined && field.value !== null
                       ? field.value.toString()
                       : "__none"
                   }
@@ -228,7 +224,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
                     field.onChange(val === "__none" ? undefined : parseInt(val))
                   }
                   value={
-                    field.value !== undefined
+                    field.value !== undefined && field.value !== null
                       ? field.value.toString()
                       : "__none"
                   }
@@ -273,7 +269,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
               <FormItem>
                 <FormLabel>Low Stock Alert</FormLabel>
                 <FormControl>
-                  <Input type="number" min={0} {...field} />
+                  <Input type="number" min={0} {...field} value={field.value ?? 0} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -351,12 +347,12 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
           <Button
             type="submit"
             disabled={
-              addProductMutation.isLoading ||
+              addProductMutation.isPending ||
               categoriesLoading ||
               suppliersLoading
             }
           >
-            {addProductMutation.isLoading ? "Adding..." : "Add Product"}
+            {addProductMutation.isPending ? "Adding..." : "Add Product"}
           </Button>
         </div>
       </form>

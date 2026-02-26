@@ -23,7 +23,9 @@ export function SalesTable() {
 
   // Sort sales by date (most recent first)
   const sortedSales = sales ? [...sales].sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
+    const dateA = a.date ? new Date(a.date).getTime() : 0;
+    const dateB = b.date ? new Date(b.date).getTime() : 0;
+    return dateB - dateA;
   }) : [];
 
   if (isLoading) {
@@ -69,7 +71,7 @@ export function SalesTable() {
           </TableHeader>
           <TableBody>
             {sortedSales.map((sale) => {
-              const saleDate = new Date(sale.date);
+              const saleDate = sale.date ? new Date(sale.date) : new Date();
               const items = Array.isArray(sale.items) ? sale.items : [];
               const itemsCount = items.length;
               
@@ -108,7 +110,7 @@ export function SalesTable() {
               <div className="flex justify-between mb-4">
                 <div>
                   <p className="text-sm text-gray-500">Date & Time</p>
-                  <p>{format(new Date(selectedSale.date), "dd MMM yyyy, hh:mm a")}</p>
+                  <p>{selectedSale.date ? format(new Date(selectedSale.date), "dd MMM yyyy, hh:mm a") : "N/A"}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-500">Total</p>

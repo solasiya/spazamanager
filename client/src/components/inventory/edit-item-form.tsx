@@ -71,10 +71,10 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
         ...values,
         purchasePrice: parseFloat(values.purchasePrice),
         sellingPrice: parseFloat(values.sellingPrice),
-        categoryId: values.categoryId ? parseInt(values.categoryId.toString()) : undefined,
-        supplierId: values.supplierId ? parseInt(values.supplierId.toString()) : undefined,
-        quantity: parseInt(values.quantity.toString()),
-        alertThreshold: parseInt(values.alertThreshold.toString()),
+        categoryId: values.categoryId ?? undefined,
+        supplierId: values.supplierId ?? undefined,
+        quantity: parseInt((values.quantity ?? 0).toString()),
+        alertThreshold: parseInt((values.alertThreshold ?? 0).toString()),
         expiryDate: values.expiryDate ? new Date(values.expiryDate) : undefined,
       };
       
@@ -127,7 +127,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
               <FormItem>
                 <FormLabel>SKU</FormLabel>
                 <FormControl>
-                  <Input placeholder="Product SKU" {...field} />
+                  <Input placeholder="Product SKU" {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -144,7 +144,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
                 <FormLabel>Category</FormLabel>
                 <Select
                   onValueChange={field.onChange}
-                  value={field.value?.toString()}
+                  value={field.value?.toString() ?? ""}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -172,7 +172,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
                 <FormLabel>Supplier</FormLabel>
                 <Select
                   onValueChange={field.onChange}
-                  value={field.value?.toString()}
+                  value={field.value?.toString() ?? ""}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -215,7 +215,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
               <FormItem>
                 <FormLabel>Low Stock Alert</FormLabel>
                 <FormControl>
-                  <Input type="number" min={0} {...field} />
+                  <Input type="number" min={0} {...field} value={field.value ?? 0} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
