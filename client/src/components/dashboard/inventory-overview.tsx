@@ -36,7 +36,7 @@ export function InventoryOverview() {
           Out of Stock
         </span>
       );
-    } else if (product.quantity <= product.alertThreshold) {
+    } else if (product.quantity <= (product.alertThreshold ?? 0)) {
       return (
         <span className="bg-warning/10 text-warning px-2 py-1 rounded text-xs">
           Low Stock

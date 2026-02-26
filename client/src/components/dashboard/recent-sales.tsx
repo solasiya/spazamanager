@@ -9,12 +9,17 @@ export function RecentSales() {
   });
 
   // Get most recent sales first
-  const recentSales = sales?.sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
-  }).slice(0, 5);
+  const recentSales = sales
+    ? [...sales].sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      }).slice(0, 5)
+    : [];
 
   // Calculate today's total sales
   const todaySales = sales?.filter(sale => {
+    if (!sale.date) return false;
     const saleDate = new Date(sale.date);
     const today = new Date();
     return saleDate.getDate() === today.getDate() &&
@@ -52,7 +57,7 @@ export function RecentSales() {
         {recentSales && recentSales.length > 0 ? (
           recentSales.map(sale => {
             const itemsCount = Array.isArray(sale.items) ? sale.items.length : 0;
-            const saleDate = new Date(sale.date);
+            const saleDate = sale.date ? new Date(sale.date) : new Date();
             const formattedTime = format(saleDate, "hh:mm a");
             const formattedDate = format(saleDate, "dd MMM yyyy");
             const isToday = format(saleDate, "dd MMM yyyy") === format(new Date(), "dd MMM yyyy");
