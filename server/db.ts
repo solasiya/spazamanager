@@ -11,42 +11,53 @@ if (!DATABASE_URL) {
   );
 }
 
-// Global error handlers for better debugging on Render
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception thrown:', err);
-  process.exit(1);
-});
-
 // Initialize Pool
-const url = new URL(DATABASE_URL);
+let poolConfig: any;
+
+if (process.env.DATABASE_URL) {
+  const url = new URL(process.env.DATABASE_URL);
+  poolConfig = {
+    host: url.hostname,
+    port: parseInt(url.port) || 3306,
+    user: url.username,
+    password: url.password,
+    database: url.pathname.replace(/^\//, '').split('?')[0],
+  };
+} else {
+  poolConfig = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '3306'),
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME || 'spaza_db',
+  };
+}
+
+// Common pool settings
 const pool = createPool({
-  host: url.hostname,
-  port: parseInt(url.port) || 3306,
-  user: url.username,
-  password: url.password, // URL constructor already decodes this
-  database: url.pathname.replace(/^\//, '').split('?')[0],
+  ...poolConfig,
   waitForConnections: true,
   connectionLimit: 5,
   idleTimeout: 30000,
   queueLimit: 0,
-  // Cloud providers (Aiven/Render) REQUIRE SSL in production
-  ssl: (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true' || url.searchParams.has('ssl-mode')) ? {
+  ssl: (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true') ? {
     rejectUnauthorized: false
   } : undefined
 });
 
+console.log(`📡 Attempting connection to ${poolConfig.host}:${poolConfig.port} as user ${poolConfig.user}...`);
+
 // Test connection without blocking export
 pool.getConnection()
   .then(conn => {
-    console.log("✅ Database connected successfully");
+    console.log("✅ Database connected successfully to:", poolConfig.host);
     conn.release();
   })
   .catch(err => {
     console.error("❌ Database connection failed:", err.message);
+    if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.error("👉 TIP: Check if your DB_PASSWORD or DATABASE_URL is correct in Render Environment settings.");
+    }
   });
 
 // Export Drizzle instance with schema
