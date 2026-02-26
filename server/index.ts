@@ -1,6 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, log } from "./vite";
 import cors from "cors";
 import { networkInterfaces } from 'os';
 import session from 'express-session';
@@ -125,6 +124,7 @@ app.use((req, res, next) => {
         res.sendFile(path.join(publicPath, 'index.html'));
       });
     } else {
+      const { setupVite } = await import("./vite");
       await setupVite(app, server);
     }
 

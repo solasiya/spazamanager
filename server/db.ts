@@ -30,7 +30,7 @@ try {
     idleTimeout: 30000,
     queueLimit: 0,
     // Add SSL support for cloud providers (like Aiven, DigitalOcean)
-    ...(process.env.DB_SSL === 'true' || url.searchParams.has('ssl') ? {
+    ...(process.env.DB_SSL === 'true' || url.searchParams.has('ssl') || url.searchParams.has('ssl-mode') ? {
       ssl: {
         rejectUnauthorized: false // Common setting for self-signed or CA-signed without file
       }
