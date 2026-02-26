@@ -12,56 +12,32 @@ if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
 
 // Initialize Pool
 let pool: any;
-let connectionInfo: any = {};
 
-if (process.env.DATABASE_URL) {
-  const url = new URL(process.env.DATABASE_URL.trim());
-  connectionInfo = {
-    host: url.hostname.trim(),
-    port: url.port || '3306',
-    user: url.username.trim(),
-    password: url.password.trim(),
-    database: url.pathname.replace(/^\//, '').split('?')[0].trim(),
-    method: 'DATABASE_URL'
-  };
-} else {
-  connectionInfo = {
-    host: (process.env.DB_HOST || 'localhost').trim(),
-    port: (process.env.DB_PORT || '3306').trim(),
-    user: (process.env.DB_USER || 'root').trim(),
-    password: (process.env.DB_PASSWORD || '').trim(),
-    database: (process.env.DB_NAME || 'spaza_db').trim(),
-    method: 'INDIVIDUAL_VARS'
-  };
-}
-
-const maskPassword = (pw: string | undefined) => {
-  if (!pw) return 'MISSING';
-  return `${pw.substring(0, 2)}... (length: ${pw.length})`;
+// Aiven and cloud databases work best with URI-style connection strings
+// to handle SSL and specific authentication plugins correctly.
+const getConnectionString = () => {
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL.trim();
+  }
+  
+  const host = (process.env.DB_HOST || '').trim();
+  const port = (process.env.DB_PORT || '3306').trim();
+  const user = (process.env.DB_USER || '').trim();
+  const password = (process.env.DB_PASSWORD || '').trim();
+  const database = (process.env.DB_NAME || '').trim();
+  
+  // Build the URI manually if DATABASE_URL is missing
+  // We append ?ssl-mode=REQUIRED as mandated by Aiven
+  return `mysql://${user}:${password}@${host}:${port}/${database}?ssl-mode=REQUIRED`;
 };
 
-console.log(`📡 DB Connection Details:
-   Method:   ${connectionInfo.method}
-   Host:     ${connectionInfo.host}:${connectionInfo.port}
-   Database: ${connectionInfo.database}
-   User:     ${connectionInfo.user}
-   PW:       ${maskPassword(connectionInfo.password)}
-`);
+const connectionUri = getConnectionString();
 
-pool = createPool({
-  host: connectionInfo.host,
-  port: parseInt(connectionInfo.port),
-  user: connectionInfo.user,
-  password: connectionInfo.password,
-  database: connectionInfo.database,
-  waitForConnections: true,
-  connectionLimit: 5,
-  idleTimeout: 30000,
-  queueLimit: 0,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
+// Masked logging for debugging
+const maskedUri = connectionUri.replace(/:([^:@]+)@/, ':****@');
+console.log(`📡 Connecting to: ${maskedUri}`);
+
+pool = createPool(connectionUri);
 
 // Test connection
 pool.getConnection()
@@ -72,7 +48,7 @@ pool.getConnection()
   .catch((err: any) => {
     console.error("❌ Database connection failed:", err.message);
     if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-      console.error("👉 ACTION REQUIRED: Ensure you have clicked 'Save changes' on the Aiven IP Whitelist (0.0.0.0/0).");
+      console.error("👉 TIP: If credentials are correct, try 'Reset Password' in Aiven and update Render.");
     }
   });
 
