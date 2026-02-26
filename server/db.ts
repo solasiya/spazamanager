@@ -15,22 +15,22 @@ let pool: any;
 let connectionInfo: any = {};
 
 if (process.env.DATABASE_URL) {
-  const url = new URL(process.env.DATABASE_URL);
+  const url = new URL(process.env.DATABASE_URL.trim());
   connectionInfo = {
-    host: url.hostname,
+    host: url.hostname.trim(),
     port: url.port || '3306',
-    user: url.username,
-    password: url.password,
-    database: url.pathname.replace(/^\//, '').split('?')[0],
+    user: url.username.trim(),
+    password: url.password.trim(),
+    database: url.pathname.replace(/^\//, '').split('?')[0].trim(),
     method: 'DATABASE_URL'
   };
 } else {
   connectionInfo = {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || '3306',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || 'spaza_db',
+    host: (process.env.DB_HOST || 'localhost').trim(),
+    port: (process.env.DB_PORT || '3306').trim(),
+    user: (process.env.DB_USER || 'root').trim(),
+    password: (process.env.DB_PASSWORD || '').trim(),
+    database: (process.env.DB_NAME || 'spaza_db').trim(),
     method: 'INDIVIDUAL_VARS'
   };
 }
