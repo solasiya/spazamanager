@@ -36,7 +36,7 @@ export const suppliers = mysqlTable("suppliers", {
   phone: varchar("phone", { length: 50 }),
   email: varchar("email", { length: 255 }),
   address: text("address"),
-  categories: json("categories"),
+  categories: json("categories").$type<string[]>(),
   lastOrderDate: timestamp("last_order_date"),
 });
 

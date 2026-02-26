@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { insertSupplierSchema, Supplier } from "@shared/schema";
+import { insertSupplierSchema, Supplier, Category } from "@shared/schema";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -58,7 +58,7 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    supplier?.categories || []
+    (supplier?.categories as string[]) || []
   );
 
   const {
@@ -68,8 +68,8 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
   } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
     queryFn: async () => {
-      // apiRequest should return parsed JSON or throw on error
-      return await apiRequest("GET", "/api/categories");
+      const res = await apiRequest("GET", "/api/categories");
+      return await res.json();
     },
   });
 
@@ -81,7 +81,7 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
       phone: supplier?.phone || "",
       email: supplier?.email || "",
       address: supplier?.address || "",
-      categories: supplier?.categories || [],
+      categories: (supplier?.categories as string[]) || [],
     },
   });
 
@@ -298,8 +298,8 @@ export function AddSupplierForm({ supplier, onSuccess }: AddSupplierFormProps) {
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={addSupplierMutation.isLoading}>
-            {addSupplierMutation.isLoading
+          <Button type="submit" disabled={addSupplierMutation.isPending}>
+            {addSupplierMutation.isPending
               ? supplier
                 ? "Updating..."
                 : "Adding..."

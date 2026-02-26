@@ -74,7 +74,7 @@ export function SupplierCard({ supplier }: SupplierCardProps) {
           <div>
             <h3 className="font-bold">{supplier.name}</h3>
             <p className="text-sm text-gray-600">
-              {supplier.categories?.join(", ") || "No categories"}
+              {(supplier.categories as string[])?.join(", ") || "No categories"}
             </p>
           </div>
         </div>

@@ -18,7 +18,7 @@ import { Pool } from 'mysql2/promise';
 const MySQLSessionStore = MySQLStore(session as any);
 
 export interface IStorage {
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
   
   // User operations
   getUser(id: number): Promise<User | undefined>;
@@ -73,7 +73,7 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
   private lastBackupAt: Date = new Date(Date.now() - 1000 * 60 * 60 * 8); // Default to 8h ago
 
   constructor(pool: Pool) {

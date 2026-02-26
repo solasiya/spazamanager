@@ -52,7 +52,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
-                <Input id="name" defaultValue={user?.fullName || user?.full_name} />
+                <Input id="name" defaultValue={user?.fullName} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
