@@ -12,28 +12,56 @@ if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
 
 // Initialize Pool
 let pool: any;
+let connectionInfo: any = {};
 
 if (process.env.DATABASE_URL) {
-  console.log("📡 Connecting using DATABASE_URL...");
-  pool = createPool(process.env.DATABASE_URL);
+  const url = new URL(process.env.DATABASE_URL);
+  connectionInfo = {
+    host: url.hostname,
+    port: url.port || '3306',
+    user: url.username,
+    password: url.password,
+    database: url.pathname.replace(/^\//, '').split('?')[0],
+    method: 'DATABASE_URL'
+  };
 } else {
-  console.log("📡 Connecting using individual environment variables...");
-  const poolConfig = {
+  connectionInfo = {
     host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '3306'),
+    port: process.env.DB_PORT || '3306',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME || 'spaza_db',
-    waitForConnections: true,
-    connectionLimit: 5,
-    idleTimeout: 30000,
-    queueLimit: 0,
-    ssl: (process.env.NODE_ENV === 'production' || process.env.DB_SSL === 'true') ? {
-      rejectUnauthorized: false
-    } : undefined
+    method: 'INDIVIDUAL_VARS'
   };
-  pool = createPool(poolConfig);
 }
+
+const maskPassword = (pw: string | undefined) => {
+  if (!pw) return 'MISSING';
+  return `${pw.substring(0, 2)}... (length: ${pw.length})`;
+};
+
+console.log(`📡 DB Connection Details:
+   Method:   ${connectionInfo.method}
+   Host:     ${connectionInfo.host}:${connectionInfo.port}
+   Database: ${connectionInfo.database}
+   User:     ${connectionInfo.user}
+   PW:       ${maskPassword(connectionInfo.password)}
+`);
+
+pool = createPool({
+  host: connectionInfo.host,
+  port: parseInt(connectionInfo.port),
+  user: connectionInfo.user,
+  password: connectionInfo.password,
+  database: connectionInfo.database,
+  waitForConnections: true,
+  connectionLimit: 5,
+  idleTimeout: 30000,
+  queueLimit: 0,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
 // Test connection
 pool.getConnection()
