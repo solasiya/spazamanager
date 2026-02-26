@@ -44,7 +44,16 @@ const pool = createPool({
   } : undefined
 });
 
-console.log(`📡 Attempting connection to ${poolConfig.host}:${poolConfig.port} as user ${poolConfig.user}...`);
+const maskPassword = (pw: string | undefined) => {
+  if (!pw) return 'MISSING';
+  return `${pw.substring(0, 2)}... (length: ${pw.length})`;
+};
+
+console.log(`📡 DB Connection Details:
+   Host: ${poolConfig.host}:${poolConfig.port}
+   User: ${poolConfig.user}
+   PW:   ${maskPassword(poolConfig.password)}
+`);
 
 // Test connection without blocking export
 pool.getConnection()
