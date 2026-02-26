@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -12,7 +12,7 @@ import {
 import { z } from "zod";
 
 // Helper function to check authentication
-function isAuthenticated(req: any, res: any, next: any) {
+function isAuthenticated(req: Request, res: Response, next: NextFunction) {
   if (req.isAuthenticated()) {
     return next();
   }
@@ -21,15 +21,15 @@ function isAuthenticated(req: any, res: any, next: any) {
 
 // Helper function to check role authorization
 function checkRole(roles: string[]) {
-  return (req: any, res: any, next: any) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthenticated" });
     }
     // Superuser can access everything
-    if (req.user.role === 'superuser' || roles.includes(req.user.role)) {
+    if (req.user!.role === 'superuser' || roles.includes(req.user!.role)) {
       return next();
     }
-    res.status(403).json({ message: "Unauthorized" });
+    res.status(403).json({ message: "Forbidden" });
   };
 }
 
@@ -239,11 +239,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/sales", isAuthenticated, async (req, res) => {
+  app.post("/api/sales", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const validatedData = insertSaleSchema.parse({
         ...req.body,
-        userId: req.user!.id,
+        userId: (req.user as any)!.id,
       });
       const sale = await storage.createSale(validatedData);
       res.status(201).json(sale);
@@ -256,7 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Restocks Routes
-  app.get("/api/restocks", isAuthenticated, async (req, res) => {
+  app.get("/api/restocks", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const restocks = await storage.getAllRestocks();
       res.json(restocks);
@@ -265,11 +265,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/restocks", checkRole(["owner", "stock_manager"]), async (req, res) => {
+  app.post("/api/restocks", checkRole(["owner", "stock_manager"]), async (req: Request, res: Response) => {
     try {
       const validatedData = insertRestockSchema.parse({
         ...req.body,
-        userId: req.user!.id,
+        userId: (req.user as any)!.id,
       });
       const restock = await storage.createRestock(validatedData);
       res.status(201).json(restock);
@@ -282,7 +282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard Stats Route
-  app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
+  app.get("/api/dashboard/stats", isAuthenticated, async (req: Request, res: Response) => {
     try {
       const range = (req.query.range as string) || "today";
       const stats = await storage.getDashboardStats(range);
@@ -293,7 +293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Users Routes (Admin only)
-  app.get("/api/users", checkRole(["owner", "supervisor"]), async (req, res) => {
+  app.get("/api/users", checkRole(["owner", "supervisor"]), async (req: Request, res: Response) => {
     try {
       const users = await storage.getAllUsers();
       // Filter out passwords
@@ -308,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // CMS Admin Routes
-  app.get("/api/admin/logs", checkRole(["superuser"]), async (req, res) => {
+  app.get("/api/admin/logs", checkRole(["superuser"]), async (req: Request, res: Response) => {
     // Mocked system logs
     const logs = [
       { id: 1, event: "New user registered", details: "User 'manager_1' was added", timestamp: new Date(Date.now() - 1000 * 60 * 30) },
@@ -320,14 +320,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(logs);
   });
 
-  app.post("/api/admin/backup", checkRole(["superuser"]), async (req, res) => {
+  app.post("/api/admin/backup", checkRole(["superuser"]), async (req: Request, res: Response) => {
     // Mock backup process
     const now = new Date();
     storage.setLastBackupTime(now);
     res.status(200).json({ message: "Backup initiated successfully", timestamp: now });
   });
 
-  app.get("/api/admin/health", checkRole(["superuser"]), async (req, res) => {
+  app.get("/api/admin/health", checkRole(["superuser"]), async (req: Request, res: Response) => {
     res.json({
       status: "Healthy",
       uptime: process.uptime(),
