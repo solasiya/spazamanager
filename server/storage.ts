@@ -97,12 +97,14 @@ export class DatabaseStorage implements IStorage {
 
   private async initializeDefaultData() {
     try {
+      console.log('🔄 Initializing database schema and default data...');
       await runMigrations();
-      
-      // Check if superuser exists
+      console.log('✅ Migrations completed or tables already exist.');
+
+      // Check for superuser
       const superuser = await this.getUserByUsername('cms');
       if (!superuser) {
-        console.log('Creating default superuser...');
+        console.log('👤 Creating default superuser (cms)...');
         const hashedPassword = await bcrypt.hash('cms123', 12);
         await this.createUser({
           username: 'cms',
@@ -110,13 +112,15 @@ export class DatabaseStorage implements IStorage {
           fullName: 'CMS Admin',
           role: 'superuser'
         });
-        console.log('✅ Default superuser created (username: cms, password: cms123)');
+        console.log('✅ Default superuser created successfully.');
+      } else {
+        console.log('👤 Superuser (cms) already exists.');
       }
 
-      // Check if admin user exists
+      // Check for admin
       const adminUser = await this.getUserByUsername('admin');
       if (!adminUser) {
-        console.log('Creating default admin user...');
+        console.log('👤 Creating default admin user (admin)...');
         const hashedPassword = await bcrypt.hash('password', 12);
         await this.createUser({
           username: 'admin',
@@ -124,10 +128,15 @@ export class DatabaseStorage implements IStorage {
           fullName: 'Store Owner',
           role: 'owner'
         });
-        console.log('✅ Default admin user created (username: admin, password: password)');
+        console.log('✅ Default admin user created successfully.');
+      } else {
+        console.log('👤 Admin user (admin) already exists.');
       }
+      
+      console.log('🏁 Database successfully initialized.');
     } catch (error) {
-      console.error("Error initializing default data:", error);
+      console.error("❌ Error initializing default data:", error);
+      // We don't throw here to avoid crashing the server if the DB is momentarily unavailable
     }
   }
 
