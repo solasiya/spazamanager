@@ -24,6 +24,8 @@ const formSchema = insertProductSchema.extend({
   purchasePrice: z.string().min(1, "Purchase price is required"),
   sellingPrice: z.string().min(1, "Selling price is required"),
   expiryDate: z.string().optional(),
+  quantity: z.coerce.number().min(0, "Quantity must be at least 0"),
+  alertThreshold: z.coerce.number().min(0, "Threshold must be at least 0"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
