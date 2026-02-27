@@ -132,6 +132,37 @@ export class DatabaseStorage implements IStorage {
       } else {
         console.log('👤 Admin user (admin) already exists.');
       }
+
+      // Initialize default grocery categories
+      const groceryCategories = [
+        "Fresh Produce",
+        "Meat & Poultry",
+        "Seafood",
+        "Dairy & Eggs",
+        "Bakery",
+        "Canned & Packaged Foods",
+        "Grains & Staples",
+        "Breakfast Foods",
+        "Spices & Condiments",
+        "Beverages",
+        "Snacks & Sweets",
+        "Household Cleaning",
+        "Toiletries & Personal Care",
+        "Baby Products",
+        "Pet Supplies"
+      ];
+
+      console.log('🛒 Checking default grocery categories...');
+      const existingCategories = await this.getAllCategories();
+      const existingNames = new Set(existingCategories.map(c => c.name));
+
+      for (const name of groceryCategories) {
+        if (!existingNames.has(name)) {
+          console.log(`➕ Adding category: ${name}`);
+          await this.createCategory({ name });
+        }
+      }
+      console.log('✅ Category check complete.');
       
       console.log('🏁 Database successfully initialized.');
     } catch (error) {
