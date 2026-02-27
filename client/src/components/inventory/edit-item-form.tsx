@@ -20,12 +20,16 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 // Extend the insertion schema with additional validation
-const formSchema = insertProductSchema.extend({
+const formSchema = z.object({
+  name: z.string().min(1, "Product name is required"),
+  sku: z.string().optional(),
+  categoryId: z.number().optional(),
+  supplierId: z.number().optional(),
+  quantity: z.coerce.number().min(0, "Quantity must be at least 0"),
+  alertThreshold: z.coerce.number().min(0, "Threshold must be at least 0"),
   purchasePrice: z.string().min(1, "Purchase price is required"),
   sellingPrice: z.string().min(1, "Selling price is required"),
   expiryDate: z.string().optional(),
-  quantity: z.coerce.number().min(0, "Quantity must be at least 0"),
-  alertThreshold: z.coerce.number().min(0, "Threshold must be at least 0"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -56,13 +60,13 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
     defaultValues: {
       name: product.name,
       sku: product.sku || "",
-      categoryId: product.categoryId,
+      categoryId: product.categoryId ?? undefined,
       quantity: product.quantity,
-      alertThreshold: product.alertThreshold,
+      alertThreshold: product.alertThreshold ?? 0,
       purchasePrice: product.purchasePrice.toString(),
       sellingPrice: product.sellingPrice.toString(),
       expiryDate: formattedExpiryDate,
-      supplierId: product.supplierId,
+      supplierId: product.supplierId ?? undefined,
     },
   });
 
@@ -108,7 +112,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="name"
             render={({ field }) => (
@@ -122,7 +126,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="sku"
             render={({ field }) => (
@@ -138,15 +142,17 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="categoryId"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Category</FormLabel>
                 <Select
-                  onValueChange={field.onChange}
-                  value={field.value?.toString() ?? ""}
+                  onValueChange={(val) =>
+                    field.onChange(val === "__none" ? null : parseInt(val))
+                  }
+                  value={field.value?.toString() ?? "__none"}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -154,6 +160,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    <SelectItem value="__none">None</SelectItem>
                     {categories?.map((category) => (
                       <SelectItem key={category.id} value={category.id.toString()}>
                         {category.name}
@@ -166,15 +173,17 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="supplierId"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Supplier</FormLabel>
                 <Select
-                  onValueChange={field.onChange}
-                  value={field.value?.toString() ?? ""}
+                  onValueChange={(val) =>
+                    field.onChange(val === "__none" ? null : parseInt(val))
+                  }
+                  value={field.value?.toString() ?? "__none"}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -182,6 +191,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    <SelectItem value="__none">None</SelectItem>
                     {suppliers?.map((supplier) => (
                       <SelectItem key={supplier.id} value={supplier.id.toString()}>
                         {supplier.name}
@@ -196,7 +206,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="quantity"
             render={({ field }) => (
@@ -210,7 +220,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="alertThreshold"
             render={({ field }) => (
@@ -224,7 +234,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
             )}
           />
           
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="expiryDate"
             render={({ field }) => (
@@ -240,7 +250,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="purchasePrice"
             render={({ field }) => (
@@ -260,7 +270,7 @@ export function EditItemForm({ product, onSuccess }: EditItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="sellingPrice"
             render={({ field }) => (

@@ -25,12 +25,16 @@ import { Category, Supplier } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 // Extend the insertion schema with additional validation
-const formSchema = insertProductSchema.extend({
+const formSchema = z.object({
+  name: z.string().min(1, "Product name is required"),
+  sku: z.string().optional(),
+  categoryId: z.number().optional(),
+  supplierId: z.number().optional(),
+  quantity: z.coerce.number().min(0, "Quantity must be at least 0"),
+  alertThreshold: z.coerce.number().min(0, "Threshold must be at least 0"),
   purchasePrice: z.string().min(1, "Purchase price is required"),
   sellingPrice: z.string().min(1, "Selling price is required"),
   expiryDate: z.string().optional(),
-  quantity: z.coerce.number().min(0, "Quantity must be at least 0"),
-  alertThreshold: z.coerce.number().min(0, "Threshold must be at least 0"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -152,7 +156,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="name"
             render={({ field }) => (
@@ -166,7 +170,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="sku"
             render={({ field }) => (
@@ -182,7 +186,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="categoryId"
             render={({ field }) => (
@@ -215,7 +219,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="supplierId"
             render={({ field }) => (
@@ -250,7 +254,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="quantity"
             render={({ field }) => (
@@ -264,7 +268,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="alertThreshold"
             render={({ field }) => (
@@ -278,7 +282,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="expiryDate"
             render={({ field }) => (
@@ -294,7 +298,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="purchasePrice"
             render={({ field }) => (
@@ -314,7 +318,7 @@ export function AddItemForm({ onSuccess }: AddItemFormProps) {
             )}
           />
 
-          <FormField
+          <FormField<FormValues>
             control={form.control}
             name="sellingPrice"
             render={({ field }) => (

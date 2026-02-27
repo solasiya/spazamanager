@@ -64,7 +64,13 @@ export const products = mysqlTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertProductSchema = createInsertSchema(products).pick({
+export const insertProductSchema = createInsertSchema(products, {
+  purchasePrice: z.coerce.string(),
+  sellingPrice: z.coerce.string(),
+  expiryDate: z.coerce.date().optional().nullable(),
+  quantity: z.coerce.number(),
+  alertThreshold: z.coerce.number(),
+}).pick({
   name: true,
   sku: true,
   categoryId: true,
@@ -85,7 +91,10 @@ export const sales = mysqlTable("sales", {
   userId: int("user_id").notNull(),
 });
 
-export const insertSaleSchema = createInsertSchema(sales).pick({
+export const insertSaleSchema = createInsertSchema(sales, {
+  total: z.coerce.string(),
+  userId: z.coerce.number(),
+}).pick({
   total: true,
   items: true,
   userId: true,
@@ -101,7 +110,11 @@ export const restocks = mysqlTable("restocks", {
   userId: int("user_id").notNull(),
 });
 
-export const insertRestockSchema = createInsertSchema(restocks).pick({
+export const insertRestockSchema = createInsertSchema(restocks, {
+  total: z.coerce.string(),
+  userId: z.coerce.number(),
+  supplierId: z.coerce.number().optional().nullable(),
+}).pick({
   supplierId: true,
   items: true,
   total: true,
